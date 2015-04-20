@@ -23,10 +23,10 @@ EncounterHistory <- function(data, session, band.number) {
         
         # Set all NAs to zero
         eh.full[is.na(eh.full)] <- 0
-        
-        # Final part summarises and creates one line per species/band.number combo
+                
+        # This part summarises and creates one line per species/band.number combo
         eh.full <- group_by(eh.full, band.id) %>%
-                summarise_each(funs(sum))
+                summarise_each(funs(first))
         
         # concatenate the sessions for input to mark (i.e. as e.g. 100010100)
         eh.mark <- data.frame(band.id = select(eh.full, 1), 
