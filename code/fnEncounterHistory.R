@@ -6,6 +6,8 @@
 # name of the unique individual identifier column
 
 EncounterHistory <- function(data, session, band.number) {
+        
+        # rename session and band number columns for use in below code
         names(data)[which(names(data)==session)]  <- "session.id"
         names(data)[which(names(data)==band.number)]  <- "band.id"
         
@@ -27,7 +29,12 @@ EncounterHistory <- function(data, session, band.number) {
                 summarise_each(funs(sum))
         
         # concatenate the sessions for input to mark (i.e. as e.g. 100010100)
-        eh.mark <- data.frame(select(eh.full, 1), ch = do.call(paste0, eh.full[,2:ncol(eh.full)]))
+        eh.mark <- data.frame(band.id = select(eh.full, 1), 
+                              ch = do.call(paste0, eh.full[,2:ncol(eh.full)]),
+                              stringsAsFactors = FALSE)
+        
+        # rename band.number column back to what it should be
+        names(eh.mark)[1] <- band.number
         
         eh <- list(eh.full = eh.full, eh.mark = eh.mark)
 }
