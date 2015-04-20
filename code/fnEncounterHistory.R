@@ -26,7 +26,11 @@ EncounterHistory <- function(data, session, band.number) {
                 
         # This part summarises and creates one line per species/band.number combo
         eh.full <- group_by(eh.full, band.id) %>%
-                summarise_each(funs(first))
+                summarise_each(funs(sum))
+        
+        # If the same individual was captured more than once in a season, it
+        # will create a number > 1 here - this code corrects it for use in MARK
+        eh.full[,2:ncol(eh.full)][eh.full[,2:ncol(eh.full)] > 1] <- 1
         
         # concatenate the sessions for input to mark (i.e. as e.g. 100010100)
         eh.mark <- data.frame(band.id = select(eh.full, 1), 
