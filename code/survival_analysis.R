@@ -59,3 +59,15 @@ sp_habitat$habitat <- factor(sp_habitat$habitat)
 # process data for use in MARK
 sp_proc <- process.data(data.frame(sp_habitat), model = "CJS", group = "habitat")
 sp_ddl <- make.design.data(sp_proc)
+
+survival_analysis <- function(){
+        Phi.dot <- list(formula=~1)
+        Phi.habitat <- list(formula=~habitat)
+        p.dot <- list(formula=~1)
+        cml <- create.model.list("CJS")
+        mark.wrapper(cml,data=sp_proc,ddl=sp_ddl,output=FALSE)
+}
+
+res <- survival_analysis()
+
+res$model.table
