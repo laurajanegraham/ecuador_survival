@@ -34,40 +34,61 @@ session.lookup$session_new <- paste0(
 # merge lookup with the dataset 
 banding.dat.clean <- merge(banding.dat.clean, session.lookup)
 
-# Analysis for individual species ---------------------------------------------------------
-
-# EncounterHistory() only requires the species of interest and columns for band
-# number and session
-species <- "COELIGENA IRIS"
-sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
-        select(Band.Number, session_new, Location) %>%
-        mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub",
-                                ifelse(Location == "MASE", "Native", "Introduced")))
-
-sp_eh <- EncounterHistory(sp_dat[,c("Band.Number", "session_new")], "session_new", "Band.Number")
-
-sp_mark <- sp_eh$eh.mark
-
-sp_habitat <- select(c.iris, Band.Number, habitat) %>%
-        unique() %>%
-        merge(c.iris.mark) %>%
-        group_by(Band.Number, ch) %>%
-        summarise(habitat = first(habitat))
-
-sp_habitat$habitat <- factor(sp_habitat$habitat)
-
-# process data for use in MARK
-sp_proc <- process.data(data.frame(sp_habitat), model = "CJS", group = "habitat")
-sp_ddl <- make.design.data(sp_proc)
-
+# Create function to run analysis in MARK --------------------------------------
+# This function can be adjusted to change the models analysed by MARK
 survival_analysis <- function(){
         Phi.dot <- list(formula=~1)
         Phi.habitat <- list(formula=~habitat)
+        Phi.TSM <- list(formula=~TSM)
+        Phi.TSMhabitat <- list(formula=~TSM+habitat)
         p.dot <- list(formula=~1)
+        #p.habitat <- list(formula=~habitat)
         cml <- create.model.list("CJS")
         mark.wrapper(cml,data=sp_proc,ddl=sp_ddl,output=FALSE)
 }
 
-res <- survival_analysis()
+# Analysis for individual species ----------------------------------------------
+species.list <- unique(banding.dat.clean$Specie.Name) 
 
-res$model.table
+# initialise list for storing results
+res <- list()
+
+for(species in species.list){
+        # get records for species, get necessary columns & set the habitat type
+        sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
+                select(Band.Number, session_new, Location) %>%
+                mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub",
+                                        ifelse(Location == "MASE", "Native", "Introduced")))
+
+        # create species' encounter history
+        sp_eh <- EncounterHistory(sp_dat[,c("Band.Number", "session_new")], 
+                                  "session_new", 
+                                  "Band.Number")
+        
+        # get encounter history formatted correctly for MARK
+        sp_mark <- sp_eh$eh.mark
+        
+        # get the habitat data onto the MARK formatted data
+        sp_habitat <- select(sp_dat, Band.Number, habitat) %>%
+                unique() %>%
+                merge(sp_mark) %>%
+                group_by(Band.Number, ch) %>%
+                summarise(habitat = first(habitat))
+
+        sp_habitat$habitat <- factor(sp_habitat$habitat)
+
+        # process data for use in MARK
+        sp_proc <- process.data(data.frame(sp_habitat), 
+                                model = "CJS", 
+                                group = "habitat")
+        
+        sp_ddl <- make.design.data(sp_proc)
+        
+        # create age field for TSM models
+        sp_ddl=add.design.data(sp_proc,sp_ddl,parameter="Phi",type="age",
+                            bins=c(0,.5,21),name="TSM")
+        
+        # run MARK analysis
+        res[[species]] <- survival_analysis()
+}
+
