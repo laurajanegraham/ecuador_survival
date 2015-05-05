@@ -17,7 +17,7 @@ banding.dat <- mdb.get("data/full_data.mdb", tables="Banding Sheet")
 write.csv(banding.dat, file="data/banding_sheet.csv")
 
 # re-read in data
-banding.dat <- read.csv("data/banding_sheet.csv")
+banding.dat <- read.csv("data/banding_sheet.csv", stringsAsFactors = FALSE)
 ```
 Variables for use in the analysis are `Band.Number`, `Specie.Name`, `Band.Size`, `Session`. Band size is included because this gives an idea of whether the individual has previously been banded and thus can find those records where the banding has not been recorded. 
 
@@ -80,17 +80,18 @@ Some individuals have been recorded as recaptures (`Band.Size == "RE"`) without 
 
 ```{r, echo=FALSE}
 # get only records recorded as recaptures
-recap.rec <- filter(banding.dat.clean, Band.Size == "RE")
+recap.rec <- filter(banding.dat.clean, Code == "R")
 
 # get only records recorded as first banding
-banding.rec <- filter(banding.dat.clean, Band.Size != "RE")
+banding.rec <- filter(banding.dat.clean, Code != "R")
 
 # find those individuals which are recorded as recaptures without a first banding
 no.first.band <- filter(recap.rec, !(Band.Number %in% banding.rec$Band.Number)) %>%
-        group_by(Specie.Name, Band.Number) %>%
+        group_by(family, Specie.Name, Band.Number) %>%
         summarise(count = length(Band.Number)) %>%
         arrange(-count)
 
+hb.no.first.band <- filter(no.first.band, family == "Trochilidae")
 print(no.first.band)
 ```
 
@@ -111,6 +112,8 @@ encounter.history[is.na(encounter.history)] <- 0
 encounter.history <- group_by(encounter.history, Specie.Name, Band.Number, family) %>%
         summarise_each(funs(sum))
 
+encounter.history[,5:ncol(encounter.history)][encounter.history[,5:ncol(encounter.history)] > 1] <- 1
+
 # Filter by Trochilidae to get the hummingbird encounter history
 hb.encounter.history <- filter(encounter.history, family=="Trochilidae")
 hb.tot.encounters <- data.frame(Species = hb.encounter.history$Specie.Name, 
@@ -118,7 +121,7 @@ hb.tot.encounters <- data.frame(Species = hb.encounter.history$Specie.Name,
                                 encounters=rowSums(hb.encounter.history[,5:31]))
 
 dupes <- encounter.history[which(duplicated(encounter.history$Band.Number)),2]
-dup.bands <- filter(encounter.history, Band.Number %in% dupes)
+dup.bands <- filter(encounter.history, Band.Number %in% dupes$Band.Number)
 dup.bands <- arrange(dup.bands, Band.Number)
 hummers <- filter(species.lookup, family == "Trochilidae")
 hb.dup.bands <- filter(dup.bands, Specie.Name %in% hummers$Specie.Name) %>%
@@ -134,3 +137,9 @@ hb.dup.bands.dat <- filter(banding.dat, Band.Number %in%
 ```
 There are a total of `r nrow(dup.bands.dat)` records which are affected by this (`r length(unique(dup.bands.dat$Band.Number))` band numbers). There are a total of `r nrow(hb.dup.bands.dat)` hummingbird records affected (`r length(unique(hb.dup.bands.dat$Band.Number))` band numbers). 
 
+```{r, echo=FALSE}
+sp.enc <- group_by(hb.encounter.history, Specie.Name) %>%
+        summarise(count = length(Specie.Name))
+
+print(sp.enc)
+```
