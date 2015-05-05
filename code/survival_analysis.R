@@ -34,28 +34,28 @@ session.lookup$session_new <- paste0(
 # merge lookup with the dataset 
 banding.dat.clean <- merge(banding.dat.clean, session.lookup)
 
-# Analysis for C. iris ---------------------------------------------------------
+# Analysis for individual species ---------------------------------------------------------
 
 # EncounterHistory() only requires the species of interest and columns for band
 # number and session
-c.iris <- filter(banding.dat.clean, Specie.Name == "COELIGENA IRIS") %>%
+species <- "COELIGENA IRIS"
+sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
         select(Band.Number, session_new, Location) %>%
         mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub",
                                 ifelse(Location == "MASE", "Native", "Introduced")))
 
-c.iris.eh <- EncounterHistory(c.iris[,c("Band.Number", "session_new")], "session_new", "Band.Number")
+sp_eh <- EncounterHistory(sp_dat[,c("Band.Number", "session_new")], "session_new", "Band.Number")
 
-c.iris.mark <- c.iris.eh$eh.mark
+sp_mark <- sp_eh$eh.mark
 
-c.iris.habitat <- select(c.iris, Band.Number, habitat) %>%
+sp_habitat <- select(c.iris, Band.Number, habitat) %>%
         unique() %>%
         merge(c.iris.mark) %>%
         group_by(Band.Number, ch) %>%
         summarise(habitat = first(habitat))
 
-c.iris.habitat$habitat <- factor(c.iris.habitat$habitat)
+sp_habitat$habitat <- factor(sp_habitat$habitat)
 
 # process data for use in MARK
-c.iris.proc <- process.data(data.frame(c.iris.habitat), model = "CJS", group = "habitat")
-c.iris.ddl <- make.design.data(c.iris.proc)
-
+sp_proc <- process.data(data.frame(sp_habitat), model = "CJS", group = "habitat")
+sp_ddl <- make.design.data(sp_proc)
