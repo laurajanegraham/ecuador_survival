@@ -6,7 +6,7 @@
 # name of the unique individual identifier column
 
 EncounterHistory <- function(data, session, band.number) {
-        
+        require(dplyr)
         # rename session and band number columns for use in below code
         names(data)[which(names(data)==session)]  <- "session.id"
         names(data)[which(names(data)==band.number)]  <- "band.id"
