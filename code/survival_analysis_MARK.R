@@ -1,10 +1,4 @@
 # Load packages and functions --------------------------------------------------
-require(Hmisc)
-require(dplyr)
-require(tidyr)
-require(RMark)
-require(R2WinBUGS)
-
 source("code/fnCleanBandingDat.R")
 source("code/fnEncounterHistory.R")
 source("code/fnSurvivalAnalysisMARK.R")
