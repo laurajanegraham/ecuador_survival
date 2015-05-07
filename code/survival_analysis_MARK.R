@@ -15,9 +15,8 @@ res <- list()
 for(species in species.list){
         # get records for species, get necessary columns & set the habitat type
         sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
-                select(Band.Number, session_new, Location)
+                select(Band.Number, session_new, habitat)
                 
-
         # create species' encounter history
         sp_eh <- EncounterHistory(sp_dat[,c("Band.Number", "session_new")], 
                                   "session_new", 
