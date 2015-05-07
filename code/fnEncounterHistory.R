@@ -39,6 +39,7 @@ EncounterHistory <- function(data, session, band.number) {
         
         # rename band.number column back to what it should be
         names(eh.mark)[1] <- band.number
+        names(eh.full)[1] <- band.number
         
         eh <- list(eh.full = eh.full, eh.mark = eh.mark)
 }
