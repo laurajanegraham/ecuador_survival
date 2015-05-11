@@ -13,10 +13,7 @@ CleanBandingDat <- function() {
         # remove records with no species, session or band (at the moment this
         # also limits the temporal extent to that used in the chapter by Boris)
         banding.dat.clean <- filter(banding.dat, Band.Number != 99999, 
-                                    !(Specie.Name %in% c("", "U", "99999"))
-                                    , substr(Session, nchar(Session)-1, nchar(Session)) 
-                                    %in% c("06", "07", "08", "09", "10", "11", "12")
-                                    ) %>%
+                                    !(Specie.Name %in% c("", "U", "99999"))) %>%
                 # also add on a habitat column based on location
                 mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub",
                                         ifelse(Location == "MASE", "Native", "Introduced")))
