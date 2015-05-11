@@ -64,14 +64,13 @@ cat("
     for (i in 1:nind){
     for (t in f[i]:(n.occasions-1)){
     phi[i,t] <- phi.g[group[i]]
-    p[i,t] <- p.g[group[i]]
+    p[i, t] <- mean.p
     } #t
     } #i
     for (u in 1:g){
     phi.g[u] ~ dunif(0, 1)              # Priors for group-specific survival
-    p.g[u] ~ dunif(0, 1)                # Priors for group-specific recapture
     }
-    
+    mean.p ~ dunif(0, 1)
     # Likelihood 
     for (i in 1:nind){
     # Define latent state at first capture
