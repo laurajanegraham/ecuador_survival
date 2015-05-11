@@ -3,6 +3,7 @@ SurvivalAnalysisMARK <- function(sp_proc, sp_ddl){
         require(RMark)
         Phi.dot <- list(formula=~1)
         Phi.habitat <- list(formula=~habitat)
+        Phi.time <- list(formula=~Time)
         Phi.TSM <- list(formula=~TSM)
         Phi.TSMhabitat <- list(formula=~TSM+habitat)
         p.dot <- list(formula=~1)
