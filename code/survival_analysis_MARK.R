@@ -1,4 +1,5 @@
 # Load packages and functions --------------------------------------------------
+require(RMark)
 source("code/fnCleanBandingDat.R")
 source("code/fnEncounterHistory.R")
 source("code/fnSurvivalAnalysisMARK.R")
