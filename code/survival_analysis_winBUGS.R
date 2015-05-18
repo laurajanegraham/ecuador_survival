@@ -12,8 +12,7 @@ banding.dat.clean <- CleanBandingDat()
 # these species)
 species.list <- group_by(banding.dat.clean, Specie.Name) %>%
         summarise(count = length(Specie.Name)) %>%
-        filter(count >= 100) %>%
-        select(Specie.Name)
+        arrange(-count)
 
 # this is the log file that will record how long each model run took. 
 logfile.name <- paste0("logs/winbugs_log_", Sys.time(), ".txt")
@@ -35,15 +34,9 @@ for (species in species.list$Specie.Name) {
         
         sp_bugs <- sp_eh$eh.full
         
-        sp_habitat <- select(sp_dat, Band.Number, habitat) %>%
-                unique() %>%
-                merge(sp_bugs) %>%
-                group_by(Band.Number) %>%
-                summarise_each("first")
-        
         # Create group variable as a number
-        group <- as.numeric(as.factor(sp_habitat$habitat))
-        CH <- as.matrix(select(sp_habitat, -Band.Number, -habitat))
+        group <- as.numeric(as.factor(sp_bugs$habitat))
+        CH <- as.matrix(select(sp_bugs, -Band.Number, -habitat))
         
         # Create vector with occasion of marking
         get.first <- function(x) min(which(x!=0))
