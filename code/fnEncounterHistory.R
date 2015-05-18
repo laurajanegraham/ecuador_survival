@@ -4,43 +4,7 @@
 # (filtered to only include one species) with the band number and the session. 
 # In the input session is the name of the session column and band.number is the 
 # name of the unique individual identifier column
-
-EncounterHistory <- function(data, session, band.number) {
-        require(dplyr)
-        # rename session and band number columns for use in below code
-        names(data)[which(names(data)==session)]  <- "session.id"
-        names(data)[which(names(data)==band.number)]  <- "band.id"
-        
-        # will require unique identifier for each row
-        data$id <- 1:nrow(data)
-        
-        # First part creates one line per record
-        eh.full <- mutate(data, count=1) %>%
-                spread(session.id, count) 
-        
-        # drop id column
-        eh.full <- eh.full[, !names(eh.full) %in% "id"]
-        
-        # Set all NAs to zero
-        eh.full[is.na(eh.full)] <- 0
-                
-        # This part summarises and creates one line per species/band.number combo
-        eh.full <- group_by(eh.full, band.id) %>%
-                summarise_each(funs(sum))
-        
-        # If the same individual was captured more than once in a season, it
-        # will create a number > 1 here - this code corrects it for use in MARK
-        eh.full[,2:ncol(eh.full)][eh.full[,2:ncol(eh.full)] > 1] <- 1
-        
-        # concatenate the sessions for input to mark (i.e. as e.g. 100010100)
-        eh.mark <- data.frame(band.id = select(eh.full, 1), 
-                              ch = do.call(paste0, eh.full[,2:ncol(eh.full)]),
-                              stringsAsFactors = FALSE)
-        
-        
-        # create m-array for input to WinBUGS 
-        # TODO: add in a bit to do by group for habitat analysis
-        CH <- eh.full[-1]
+fnMarray <- function(CH){
         nind <- nrow(CH)
         n.occasions <- ncol(CH)
         m.array <- matrix(data = 0, ncol = n.occasions + 1, nrow = n.occasions)
@@ -58,12 +22,70 @@ EncounterHistory <- function(data, session, band.number) {
         }
         
         m.array <- m.array[1:(n.occasions - 1), 2:(n.occasions + 1)]
+        return(m.array)
+}
+
+EncounterHistory <- function(data, session, band.number, group = NULL) {
+        require(plyr)
+        require(dplyr)
+        # rename session and band number columns for use in below code
+        names(data)[which(names(data)==session)]  <- "session.id"
+        names(data)[which(names(data)==band.number)]  <- "band.id"
+        if(is.null(group)){
+                data$group.id <- 1
+        } else {
+                names(data)[which(names(data)==group)] <- "group.id"
+        }
+                
+        # will require unique identifier for each row
+        data$id <- 1:nrow(data)
+        
+        # First part creates one line per record
+        eh.full <- mutate(data, count=1) %>%
+                spread(session.id, count) %>%
+                select(-id)
+        
+        # Set all NAs to zero
+        eh.full[is.na(eh.full)] <- 0
+                
+        # This part summarises and creates one line per species/band.number combo
+        eh.counts <- group_by(eh.full, band.id) %>%
+                summarise_each(funs(sum), matches("session")) 
+        
+        eh.habitat <- group_by(eh.full, band.id) %>%
+                summarise(group.id = first(group.id))
+        
+        eh.full <- merge(eh.habitat, eh.counts)
+        
+        # If the same individual was captured more than once in a season, it
+        # will create a number > 1 here - this code corrects it for use in MARK
+        eh.full[,3:ncol(eh.full)][eh.full[,3:ncol(eh.full)] > 1] <- 1
+        
+        # concatenate the sessions for input to mark (i.e. as e.g. 100010100)
+        eh.mark <- data.frame(band.id = select(eh.full, 1), group.id = select(eh.full, 2),
+                              ch = do.call(paste0, eh.full[,3:ncol(eh.full)]),
+                              stringsAsFactors = FALSE)
         
         
+        # create m-array for input to WinBUGS 
+        CH <- eh.full[,-1]
+        m.array <- fnMarray(CH[,-1])
+        CH <- split(CH[,-1], f = CH$group.id)
+        m.array.gp <- lapply(CH, fnMarray)
+        
+                
         # rename band.number column back to what it should be
         names(eh.mark)[1] <- band.number
         names(eh.full)[1] <- band.number
+        if(is.null(group)){
+                eh.mark <- select(eh.mark, -group.id)
+                eh.full <- select(eh.full, -group.id)
+        } else {
+                names(eh.mark)[2] <- group
+                names(eh.full)[2] <- group
+        }
         
-        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array)
+        # TODO: add in a bit to do by group for habitat analysis
+        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp)
         return(eh)
 }
