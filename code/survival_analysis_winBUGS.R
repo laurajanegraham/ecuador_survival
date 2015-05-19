@@ -28,9 +28,10 @@ for (species in species.list$Specie.Name) {
         sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
                 select(Band.Number, session_new, habitat)
         
-        sp_eh <- EncounterHistory(sp_dat[,c("Band.Number", "session_new")], 
+        sp_eh <- EncounterHistory(sp_dat, 
                                   "session_new", 
-                                  "Band.Number")
+                                  "Band.Number",
+                                  "habitat")
         
         sp_bugs <- sp_eh$eh.full
         
@@ -48,7 +49,7 @@ for (species in species.list$Specie.Name) {
         bugs.data <- list(y = CH, f = f, nind = dim(CH)[1], n.occasions = dim(CH)[2], z = known.state.cjs(CH), g = length(unique(group)), group = group)
         
         # Initial values
-        inits <- function(){list(z = cjs.init.z(CH, f), phi.g = runif(length(unique(group)), 0, 1), p.g = runif(length(unique(group)), 0, 1))}  
+        inits <- function(){list(z = cjs.init.z(CH, f), phi.g = runif(length(unique(group)), 0, 1), mean.p = runif(1, 0, 1))}  
         
         # Parameters monitored
         parameters <- c("phi.g", "mean.p")
