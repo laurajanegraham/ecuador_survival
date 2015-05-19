@@ -221,8 +221,13 @@ survival.res <- data.frame(survival.res)
 survival.res$Species <- rownames(survival.res)
 survival.res <- arrange(survival.res, Species)
 rownames(survival.res) <- survival.res$Species
+colnames(survival.res)[3] <- "sigma2"
 select(survival.res, -Species)
 ```
+
+- `mean.phi` - overall survival probability (across all sampling periods)
+- `mean.p` - recapture probability
+- `sigma2` - variance of survival probability (across all sampling periods)
 
 ## Fit for D. cyanea random time effects model 
 Well fitting model should be close to the 1:1 line
@@ -249,3 +254,9 @@ phi.post <- gather(phi.post, "time", "posterior", -id)
 ggplot(phi.post, aes(x = posterior)) + geom_density(fill = time) + facet_wrap(~time) + geom_hline(yintercept = 1)
 
 ```
+
+## Summary
+
+- Possibility to estimate variance of survival probability means can incorporate a temporal covariate
+- Needs more work on model selection / goodness of fit testing
+- Run for more species and models
