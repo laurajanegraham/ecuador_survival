@@ -250,3 +250,60 @@ model {
     }
     ",fill = TRUE)
 sink()
+
+# code for multinomial formulation with fixed group effects --------------------
+sink("~/.wine/drive_c/temp/Rtmp/cjs-mnl-habitat.bug")
+cat("
+    model {
+    # Priors and constraints
+    for (t in 1:(n.occasions-1)){
+    phi.intro[t] <- mean.phiintro
+    phi.native[t] <- mean.phinative
+    phi.scrub[t] <- mean.phiscrub
+    p[t] <- mean.p
+    }
+    mean.phiintro ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phinative ~ dunif(0, 1)           # Prior for mean survival in native habitat
+    mean.phiscrub ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.p ~ dunif(0, 1)               # Prior for mean recapture
+    # Define the multinomial likelihood
+    for (t in 1:(n.occasions-1)){
+    marr.i[t,1:n.occasions] ~ dmulti(pr.i[t,], r.i[t])
+    marr.n[t,1:n.occasions] ~ dmulti(pr.n[t,], r.n[t])
+    marr.s[t,1:n.occasions] ~ dmulti(pr.s[t,], r.s[t])
+    }
+    # Calculate the number of birds released each year
+    for (t in 1:(n.occasions-1)){
+    r.i[t] <- sum(marr.i[t,])
+    r.n[t] <- sum(marr.n[t,])
+    r.s[t] <- sum(marr.s[t,])
+    }
+    # Define the cell probabilities of the m-arrays
+    # Main diagonal
+    for (t in 1:(n.occasions-1)){
+    q[t] <- 1-p[t]            # Probability of non-recapture
+    pr.i[t,t] <- phi.intro[t]*p[t]
+    pr.n[t,t] <- phi.native[t]*p[t]
+    pr.s[t,t] <- phi.scrub[t]*p[t]
+    # Above main diagonal
+    for (j in (t+1):(n.occasions-1)){
+    pr.i[t,j] <- prod(phi.intro[t:j])*prod(q[t:(j-1)])*p[j]
+    pr.n[t,j] <- prod(phi.native[t:j])*prod(q[t:(j-1)])*p[j]
+    pr.s[t,j] <- prod(phi.scrub[t:j])*prod(q[t:(j-1)])*p[j]
+    } #j
+    # Below main diagonal
+    for (j in 1:(t-1)){
+    pr.i[t,j] <- 0
+    pr.n[t,j] <- 0
+    pr.s[t,j] <- 0
+    } #j
+    } #t
+    # Last column: probability of non-recapture
+    for (t in 1:(n.occasions-1)){
+    pr.i[t,n.occasions] <- 1-sum(pr.i[t,1:(n.occasions-1)])
+    pr.n[t,n.occasions] <- 1-sum(pr.n[t,1:(n.occasions-1)])
+    pr.s[t,n.occasions] <- 1-sum(pr.s[t,1:(n.occasions-1)])
+    } #t
+    }
+    ",fill = TRUE)
+sink()
