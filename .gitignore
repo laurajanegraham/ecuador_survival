@@ -4,4 +4,6 @@
 *.Rproj
 data/
 papers/
+logs/
+
 
