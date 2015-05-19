@@ -26,7 +26,6 @@ fnMarray <- function(CH){
 }
 
 EncounterHistory <- function(data, session, band.number, group = NULL) {
-        require(plyr)
         require(dplyr)
         # rename session and band number columns for use in below code
         names(data)[which(names(data)==session)]  <- "session.id"
@@ -62,7 +61,7 @@ EncounterHistory <- function(data, session, band.number, group = NULL) {
         eh.full[,3:ncol(eh.full)][eh.full[,3:ncol(eh.full)] > 1] <- 1
         
         # concatenate the sessions for input to mark (i.e. as e.g. 100010100)
-        eh.mark <- data.frame(band.id = select(eh.full, 1), group.id = select(eh.full, 2),
+        eh.mark <- data.frame(select(eh.full, 1, 2),
                               ch = do.call(paste0, eh.full[,3:ncol(eh.full)]),
                               stringsAsFactors = FALSE)
         
