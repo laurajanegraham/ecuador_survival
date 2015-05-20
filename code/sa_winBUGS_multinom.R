@@ -19,12 +19,14 @@ species.list <- group_by(banding.dat.clean, Specie.Name) %>%
         arrange(-count)
 
 species.list <- species.list[1:5,1]
+cjs.mnl.time.ran <- list()
+
 for (species in species.list$Specie.Name){
 
         sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
                 select(Band.Number, session_new, habitat)
         
-        sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number", "habitat")
+        sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number")
         
         marr <- sp_eh$m.array
         marr.gp <- sp_eh$m.array.gp
@@ -49,11 +51,12 @@ for (species in species.list$Specie.Name){
         write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), 
               logfile.name, append = TRUE)
         strt <- Sys.time()       
-        cjs <- bugs(bugs.data, inits, parameters, "cjs-mnl-ran-time.bug", n.chains = nc, n.thin = nt, 
-                    n.iter = ni, n.burnin = nb, debug = TRUE, 
+        cjs.mnl.time.ran[[species]] <- bugs(bugs.data, inits, parameters, "cjs-mnl-ran-time.bug", n.chains = nc, n.thin = nt, 
+                    n.iter = ni, n.burnin = nb, debug = FALSE, 
                     working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE)
         
         write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
                     sep = " "), logfile.name, append = TRUE)
 }
 
+save(cjs.mnl.time.ran, file="results/cjs.mnl.time.ran.rda")
