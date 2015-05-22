@@ -192,9 +192,10 @@ cat("
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-    logit(phi[t]) <- mu + epsilon[t]
-    epsilon[t] ~ dnorm(0, tau)
-    p[t] <- mean.p
+        logit(phi[t]) <- mu + epsilon[t]
+        epsilon[t] ~ dnorm(0, tau)
+        p[t] <- mean.p
+        phi.est[t] <- 1 / (1 + exp())
     }
     mean.phi ~ dunif(0, 1)             # Prior for mean survival
     mu <- log(mean.phi / (1-mean.phi)) # Logit transformation
@@ -206,48 +207,49 @@ model {
     mean.p ~ dunif(0, 1)                   # Prior for mean recapture
     # Define the multinomial likelihood
     for (t in 1:(n.occasions-1)){
-    marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+        marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
     }
     # Calculate the number of birds released each year
     for (t in 1:(n.occasions-1)){
-    r[t] <- sum(marr[t,])
+        r[t] <- sum(marr[t,])
     }
     # Define the cell probabilities of the m-array:
     # Main diagonal
     for (t in 1:(n.occasions-1)){
-    q[t] <- 1-p[t]
-    pr[t,t] <- phi[t]*p[t]	
-    # Above main diagonal
-    for (j in (t+1):(n.occasions-1)){
-    pr[t,j] <- prod(phi[t:j])*prod(q[t:(j-1)])*p[j]
-    } #j	
+        q[t] <- 1-p[t]
+        pr[t,t] <- phi[t]*p[t]	
+        # Above main diagonal
+        for (j in (t+1):(n.occasions-1)){
+            pr[t,j] <- prod(phi[t:j])*prod(q[t:(j-1)])*p[j]
+        } #j	
     # Below main diagonal
-    for (j in 1:(t-1)){
-    pr[t,j]<-0
-    } #j
+        for (j in 1:(t-1)){
+            pr[t,j]<-0
+        } #j
     } #t
     # Last column: probability of non-recapture
     for (t in 1:(n.occasions-1)){
-    pr[t,n.occasions] <- 1-sum(pr[t,1:(n.occasions-1)])
+        pr[t,n.occasions] <- 1-sum(pr[t,1:(n.occasions-1)])
     } # t
+
     # Assess model fit using Freeman-Tukey statistic
     # Compute fit statistics for observed data
     for (t in 1:(n.occasions-1)){
-    for (j in 1:n.occasions){
-    expmarr[t,j] <- r[t]*pr[t,j]
-    E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j], 0.5)), 2)
-    }
+        for (j in 1:n.occasions){
+            expmarr[t,j] <- r[t]*pr[t,j]
+            E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j], 0.5)), 2)
+        }
     }
     # Generate replicate data and compute fit stats from them
     for (t in 1:(n.occasions-1)){
-    marr.new[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
-    for (j in 1:n.occasions){
-    E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j], 0.5)), 2)
-    }
+        marr.new[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+        for (j in 1:n.occasions){
+            E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j], 0.5)), 2)
+        }
     }
     fit <- sum(E.org[,])
     fit.new <- sum(E.new[,])
-    }
+}
     ",fill = TRUE)
 sink()
 
@@ -304,6 +306,32 @@ cat("
     pr.n[t,n.occasions] <- 1-sum(pr.n[t,1:(n.occasions-1)])
     pr.s[t,n.occasions] <- 1-sum(pr.s[t,1:(n.occasions-1)])
     } #t
+
+    # Assess model fit using Freeman-Tukey statistic
+    # Compute fit statistics for observed data
+    for (t in 1:(n.occasions-1)){
+        for (j in 1:n.occasions){
+            expmarr.i[t,j] <- r.i[t]*pr.i[t,j]
+            expmarr.n[t,j] <- r.n[t]*pr.n[t,j]
+            expmarr.s[t,j] <- r.s[t]*pr.s[t,j]
+            E.org.i[t,j] <- pow((pow(marr.i[t,j], 0.5)-pow(expmarr.i[t,j], 0.5)), 2)
+            E.org.n[t,j] <- pow((pow(marr.n[t,j], 0.5)-pow(expmarr.n[t,j], 0.5)), 2)
+            E.org.s[t,j] <- pow((pow(marr.s[t,j], 0.5)-pow(expmarr.s[t,j], 0.5)), 2)
+        }
+    }
+    # Generate replicate data and compute fit stats from them
+    for (t in 1:(n.occasions-1)){
+        marr.new.i[t,1:n.occasions] ~ dmulti(pr.i[t,], r.i[t])
+        marr.new.n[t,1:n.occasions] ~ dmulti(pr.n[t,], r.n[t])
+        marr.new.s[t,1:n.occasions] ~ dmulti(pr.s[t,], r.s[t])
+        for (j in 1:n.occasions){
+            E.new.i[t,j] <- pow((pow(marr.new.i[t,j], 0.5)-pow(expmarr.i[t,j], 0.5)), 2)
+            E.new.n[t,j] <- pow((pow(marr.new.n[t,j], 0.5)-pow(expmarr.n[t,j], 0.5)), 2)
+            E.new.s[t,j] <- pow((pow(marr.new.s[t,j], 0.5)-pow(expmarr.s[t,j], 0.5)), 2)
+        }
+    }
+    fit <- sum(E.org.i[,]) + sum(E.org.n[,]) + sum(E.org.s[,])
+    fit.new <- sum(E.new.i[,]) + sum(E.new.n[,]) + sum(E.new.s[,])
     }
     ",fill = TRUE)
 sink()
