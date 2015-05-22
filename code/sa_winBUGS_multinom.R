@@ -20,16 +20,46 @@ species.list <- group_by(banding.dat.clean, Specie.Name) %>%
 
 species.list <- species.list[1:5,1]
 cjs.mnl.time.ran <- list()
-
+cjs.mnl.habitat <- list()
 for (species in species.list$Specie.Name){
 
         sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
                 select(Band.Number, session_new, habitat)
         
-        sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number")
+        sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number", "habitat")
         
         marr <- sp_eh$m.array
         marr.gp <- sp_eh$m.array.gp
+        
+        # Code for the fixed group effects analysis ----------------------------
+        bugs.data <- list(marr.i = marr.gp[["Introduced"]], marr.n = marr.gp[["Native"]],
+                          marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr))
+        
+        inits <- function(){list(mean.phiintro = runif(1, 0, 1), 
+                                 mean.phinative = runif(1, 0, 1),
+                                 mean.phiscrub = runif(1, 0, 1),
+                                 mean.p = runif(1, 0, 1))}  
+        
+        # Parameters monitored
+        parameters <- c("mean.p", "mean.phinative", "mean.phiscrub", "mean.phiintro", 
+                        "fit", "fit.new")
+        
+        ni <- 10000
+        nt <- 3
+        nb <- 2000
+        nc <- 3
+        
+        write(paste("Analysis by habitat for", species, sep=" "), 
+              logfile.name, append = TRUE)
+        write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), 
+              logfile.name, append = TRUE)
+        strt <- Sys.time()       
+        cjs.mnl.habitat[[species]] <- bugs(bugs.data, inits, parameters, "cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, 
+                     n.iter = ni, n.burnin = nb, debug = FALSE, 
+                     working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE)
+        
+        write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
+                    sep = " "), logfile.name, append = TRUE)
         
         
         # Code for the random time effects analysis ------------------------------------
@@ -46,7 +76,7 @@ for (species in species.list$Specie.Name){
         nb <- 2000
         nc <- 3
         
-        write(paste("Analysis by habitat for", species, sep=" "), 
+        write(paste("Analysis by time (random) for", species, sep=" "), 
               logfile.name, append = TRUE)
         write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), 
               logfile.name, append = TRUE)
@@ -59,4 +89,5 @@ for (species in species.list$Specie.Name){
                     sep = " "), logfile.name, append = TRUE)
 }
 
-save(cjs.mnl.time.ran, file="results/cjs.mnl.time.ran.rda")
+save(cjs.mnl.time.ran, file = "results/cjs.mnl.time.ran.rda")
+save(cjs.mnl.habitat, file = "results/cjs.mnl.habitat.rda")
