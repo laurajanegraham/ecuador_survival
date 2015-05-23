@@ -1,5 +1,6 @@
 require(R2WinBUGS)
 require(mcmcplots)
+require(dplyr)
 source("code/fnCleanBandingDat.R")
 source("code/fnEncounterHistory.R")
 source("code/fnKnownStateInits.R")
@@ -16,9 +17,8 @@ file.create(logfile.name)
 # these species)
 species.list <- group_by(banding.dat.clean, Specie.Name) %>%
         summarise(count = length(Specie.Name)) %>%
-        arrange(-count)
+        filter(count > 50)
 
-species.list <- species.list[1:5,1]
 cjs.mnl.time.ran <- list()
 cjs.mnl.habitat <- list()
 for (species in species.list$Specie.Name){
@@ -54,14 +54,16 @@ for (species in species.list$Specie.Name){
         write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), 
               logfile.name, append = TRUE)
         strt <- Sys.time()       
-        cjs.mnl.habitat[[species]] <- bugs(bugs.data, inits, parameters, "cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, 
+        cjs.mnl.habitat[[species]] <- try(bugs(bugs.data, inits, parameters, "cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, 
                      n.iter = ni, n.burnin = nb, debug = FALSE, 
-                     working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE)
-        
-        write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
-                    sep = " "), logfile.name, append = TRUE)
-        
-        
+                     working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE))
+        if(class(cjs.mnl.habitat[[species]]) == "try-error") {
+            write ("Model failed, check species present in all habitats and rerun")
+        } else {
+            write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
+                        sep = " "), logfile.name, append = TRUE)
+        }
+            
         # Code for the random time effects analysis ------------------------------------
         bugs.data <- list(marr = marr, n.occasions = ncol(marr))
         
