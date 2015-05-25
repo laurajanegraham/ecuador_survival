@@ -21,6 +21,10 @@ species.list <- group_by(banding.dat.clean, Specie.Name) %>%
 
 cjs.mnl.time.ran <- list()
 cjs.mnl.habitat <- list()
+notrun <- NULL 
+# this will create a list of species where the habitat analysis wasn't run
+# (because it's not present in all 3 habitats)
+
 for (species in species.list$Specie.Name){
 
         sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
@@ -56,9 +60,11 @@ for (species in species.list$Specie.Name){
         strt <- Sys.time()       
         cjs.mnl.habitat[[species]] <- try(bugs(bugs.data, inits, parameters, "cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, 
                      n.iter = ni, n.burnin = nb, debug = FALSE, 
-                     working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE))
+                     working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE), silent = TRUE)
         if(class(cjs.mnl.habitat[[species]]) == "try-error") {
-            write ("Model failed, check species present in all habitats and rerun")
+            write ("Model failed, check species present in all habitats and rerun", 
+                   logfile.name, append = TRUE)
+            notrun <- cbind(notrun, species)
         } else {
             write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
                         sep = " "), logfile.name, append = TRUE)
@@ -91,5 +97,44 @@ for (species in species.list$Specie.Name){
                     sep = " "), logfile.name, append = TRUE)
 }
 
+for(species in notrun){
+    sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
+        select(Band.Number, session_new, habitat)
+    
+    sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number", "habitat")
+    
+    marr <- sp_eh$m.array
+    marr.gp <- sp_eh$m.array.gp
+    
+    # Code for the fixed group effects analysis ----------------------------
+    bugs.data <- list(marr.i = marr.gp[["Introduced"]],
+                      marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr))
+    
+    inits <- function(){list(mean.phiintro = runif(1, 0, 1), 
+                             mean.phiscrub = runif(1, 0, 1),
+                             mean.p = runif(1, 0, 1))}  
+    
+    # Parameters monitored
+    parameters <- c("mean.p", "mean.phiscrub", "mean.phiintro", 
+                    "fit", "fit.new")
+    
+    ni <- 10000
+    nt <- 3
+    nb <- 2000
+    nc <- 3
+    
+    write(paste("Analysis by habitat for", species, sep=" "), 
+          logfile.name, append = TRUE)
+    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), 
+          logfile.name, append = TRUE)
+    strt <- Sys.time()       
+    cjs.mnl.habitat[[species]] <- try(bugs(bugs.data, inits, parameters, "cjs-mnl-habitat-2groups.bug", n.chains = nc, n.thin = nt, 
+                                           n.iter = ni, n.burnin = nb, debug = FALSE, 
+                                           working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE), silent = TRUE)
+
+    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
+                    sep = " "), logfile.name, append = TRUE)
+    
+}
 save(cjs.mnl.time.ran, file = "results/cjs.mnl.time.ran.rda")
 save(cjs.mnl.habitat, file = "results/cjs.mnl.habitat.rda")
