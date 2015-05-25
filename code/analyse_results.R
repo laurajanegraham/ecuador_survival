@@ -4,17 +4,8 @@ require(R2WinBUGS)
 require(dplyr)
 
 # load results for each model
-load("results/cjs.group.habitat.rda")
+load("results/cjs.mnl.habitat.rda")
 load("results/cjs.mnl.time.ran.rda")
-
-# DIC is not helpful with hierarchical models...
-group.dic <- data.frame(sapply(cjs.group.habitat, function(x) round(x$DIC, 2)))
-group.dic$Species <- rownames(group.dic)
-time.dic <- data.frame(sapply(cjs.mnl.time.ran, function(x) round(x$DIC, 2)))
-time.dic$Species <- rownames(time.dic)
-dic.values <- merge(time.dic, group.dic)
-names(dic.values) <- c("Species", "time", "habitat")
-save(dic.values, file = "results/dicvalues.rda")
 
 # overall survival probabilities for the random time effects
 # with sd
@@ -28,16 +19,6 @@ survival.res <- sapply(cjs.mnl.time.ran, function(x) {
 })
 
 survival.res <- t(survival.res)
-
-# means only
-survival.res <- sapply(cjs.mnl.time.ran, function(x) {
-        c(mean.phi = round(x$mean$mean.phi, 2), 
-          mean.p = round(x$mean$mean.p, 2), 
-          mean.sigma2 = round(x$mean$sigma2.real, 2)) 
-})
-
-survival.res <- t(survival.res)
-save(survival.res, file="results/survival.res")
 
 # get the fit stats out of the BUGS objects and into a dataframe with species names
 fit.stats <- lapply(cjs.mnl.time.ran, function(x){
