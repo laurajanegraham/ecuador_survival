@@ -25,6 +25,23 @@ fnMarray <- function(CH){
         return(m.array)
 }
 
+# For the TSD model, there needs to be two M-arrays, one with the first two 
+# caputres (for phi[1]) and one minus the first capture (phi[2+]). The below two
+# functions split the encounter histories into these
+get.first <- function(x) {
+    # identify first and second non-zero value (sometimes there is only a first)
+    first <- na.omit(which(x!=0)[c(1,2)])
+    # set all others to zero
+    x[-first] <- 0
+    return(x)
+}
+
+get.other <- function(x) {
+    first <- min(which(x!=0))
+    x[first] <- 0
+    return(x)
+}
+
 EncounterHistory <- function(data, session, band.number, group = NULL) {
         require(dplyr)
         # rename session and band number columns for use in below code
@@ -66,12 +83,23 @@ EncounterHistory <- function(data, session, band.number, group = NULL) {
                               stringsAsFactors = FALSE)
         
         
+        # create the TSM encounter histories
+        eh.first <- data.frame(t(apply(eh.full[3:ncol(eh.full)], 1, get.first)))
+        eh.other <- data.frame(t(apply(eh.full[3:ncol(eh.full)], 1, get.other)))
+        cap <- rowSums(eh.full[,3:ncol(eh.full)])
+        not.cap <- eh.full[which(cap < 2),3:ncol(eh.full)]
+        
         # create m-array for input to WinBUGS 
         CH <- eh.full[,-1]
         m.array <- fnMarray(CH[,-1])
         CH <- split(CH[,-1], f = CH$group.id)
         m.array.gp <- lapply(CH, fnMarray)
-        
+        m.array.TSM1 <- fnMarray(eh.first)
+        m.array.TSM1[,ncol(m.array.TSM1)] <- 0 
+        # final col is tot recaptures - need to adjust so it doesn't include
+        # those recaptured in TSM2
+        m.array.TSM1[,ncol(m.array.TSM1)] <- colSums(not.cap[,1:ncol(not.cap) - 1])
+        m.array.TSM2 <- fnMarray(eh.other)
                 
         # rename band.number column back to what it should be
         names(eh.mark)[1] <- band.number
@@ -85,6 +113,6 @@ EncounterHistory <- function(data, session, band.number, group = NULL) {
         }
         
         # TODO: add in a bit to do by group for habitat analysis
-        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp)
+        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp, m.array.TSM1 = m.array.TSM1, m.array.TSM2 = m.array.TSM2)
         return(eh)
 }
