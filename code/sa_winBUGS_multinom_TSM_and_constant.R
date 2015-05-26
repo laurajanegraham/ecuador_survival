@@ -20,6 +20,7 @@ species.list <- group_by(banding.dat.clean, Specie.Name) %>%
     filter(count > 50)
 
 cjs.mnl.tsm <- list()
+cjs.mnl.constant <- list()
 
 for (species in species.list$Specie.Name){
     sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
@@ -75,10 +76,13 @@ for (species in species.list$Specie.Name){
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), 
           logfile.name, append = TRUE)
     strt <- Sys.time()       
-    cjs.mnl.tsm[[species]] <- bugs(bugs.data, inits, parameters, "cjs-mnl-fixed.bug", n.chains = nc, n.thin = nt, 
+    cjs.mnl.constant[[species]] <- bugs(bugs.data, inits, parameters, "cjs-mnl-fixed.bug", n.chains = nc, n.thin = nt, 
                                    n.iter = ni, n.burnin = nb, debug = FALSE, 
                                    working.directory='~/.wine/drive_c/temp/Rtmp/', clearWD=TRUE)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
                 sep = " "), logfile.name, append = TRUE)
     
 }
+
+save(cjs.mnl.constant, file = "results/cjs.mnl.constant.rda")
+save(cjs.mnl.tsm, file = "results/cjs.mnl.tsm.rda")
