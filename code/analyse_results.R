@@ -2,10 +2,13 @@
 require(ggplot2)
 require(R2WinBUGS)
 require(dplyr)
+require(taxize)
 
 # load results for each model
 load("results/cjs.mnl.habitat.rda")
 load("results/cjs.mnl.time.ran.rda")
+load("results/cjs.mnl.tsm.rda")
+load("results/cjs.mnl.constant.rda")
 
 # Results for model with randon time effects -----------------------------------
 survival.res <- lapply(cjs.mnl.time.ran, function(x) {
@@ -51,8 +54,8 @@ ggplot(fit.stats, aes(x = fit, y = fit.new)) +
 ggsave("results/time_model_fit.png", width = 12, height = 8)
 
 # get the Bayesian p-values
-p.vals <- group_by(fit.stats, species) %>%
-    summarise(p.val = round(mean(fit.new > fit), 2))
+p.vals.time <- group_by(fit.stats, species) %>%
+    summarise(p.val.time = round(mean(fit.new > fit), 2))
 
 # get and plot the posterior distribution for sigma (to check it's defined)
 sigma <- lapply(cjs.mnl.time.ran, function(x) {
@@ -85,7 +88,7 @@ sp_stat <- t(data.frame(strsplit(rownames(habitat.survival.res), "[.]")))
 habitat.survival.res <- cbind(habitat.survival.res, sp_stat)
 colnames(habitat.survival.res) <- c("Mean", "SD", "Species", "stat")
 statlookup <- data.frame(stat = c("mean_p", "mean_phinative", "mean_phiintro", "mean_phiscrub"),
-                         Stat = c("p", "Phi (native)", "Phi (introduced)", "Phi (scrub)"))
+                         Stat = c("p", "Phi (native)", "Phi (introduced)", "Phi (native shrubs)"))
 habitat.survival.res <- merge(habitat.survival.res, statlookup)
 habitat.survival.res <- arrange(habitat.survival.res, Species, Stat) %>%
     select(Species, Stat, Mean, SD) %>%
@@ -117,12 +120,118 @@ ggsave("results/habitat_model_fit.png", width = 12, height = 8)
 
 # get the Bayesian p-values
 p.vals.hab <- group_by(fit.stats.hab, species) %>%
-    summarise(p.val.hab = round(mean(fit.new > fit), 2))
+    summarise(p.val.hab = round(mean(fit.new > fit), 2)) %>%
+    select(p.val.hab)
 
-p.vals <- merge(p.vals, p.vals.hab)
+# Results for constant model ---------------------------------------------------
+constant.survival.res <- lapply(cjs.mnl.constant, function(x) {
+    out <- data.frame(t(rbind(data.frame(x$mean), data.frame(x$sd))))
+    rownames(out) <- gsub("[.]", "_", rownames(out))
+    return(out)
+})
 
-p.vals$best.mod <- ifelse(abs(0.5 - p.vals$p.val) > abs(0.5 - p.vals$p.val.hab), "habitat", "time") 
+constant.survival.res <- do.call("rbind", constant.survival.res)
+sp_stat <- t(data.frame(strsplit(rownames(constant.survival.res), "[.]")))
+constant.survival.res <- cbind(constant.survival.res, sp_stat)
+colnames(constant.survival.res) <- c("Mean", "SD", "Species", "stat")
+statlookup <- data.frame(stat = c("mean_p", "mean_phi"),
+                         Stat = c("p", "Phi"))
+constant.survival.res <- merge(constant.survival.res, statlookup)
+constant.survival.res <- arrange(constant.survival.res, Species, Stat) %>%
+    select(Species, Stat, Mean, SD) %>%
+    mutate(Mean = round(Mean, 2), 
+           SD = round(SD, 2))
+
+# get the fit stats out of the BUGS objects and into a dataframe with species names
+fit.stats.constant <- lapply(cjs.mnl.constant, function(x){
+    data.frame(fit=x$sims.list$fit, 
+               fit.new=x$sims.list$fit.new)
+})
+
+fit.stats.constant <- do.call("rbind", fit.stats.constant)
+sp <- rownames(fit.stats.constant)
+sp <- gsub("[[:digit:]]", "", sp)
+sp <- gsub("[.]", "", sp)
+fit.stats.constant$species <- sp
+
+# plot fit against fit.new with the 1:1 line
+ggplot(fit.stats.constant, aes(x = fit, y = fit.new)) + 
+    geom_point(shape = 1) + 
+    geom_abline(intercept = 0, slope = 1) + 
+    scale_x_continuous(name = "Discrepancy simulated data") + 
+    scale_y_continuous(name = "Discrepancy observed data") + 
+    facet_wrap(~species) + 
+    theme_classic()
+
+ggsave("results/constant_model_fit.png", width = 12, height = 8)
+
+# get the Bayesian p-values
+p.vals.constant <- group_by(fit.stats.constant, species) %>%
+    summarise(p.val.constant = round(mean(fit.new > fit), 2))  %>%
+    select(p.val.constant)
+
+# Results for TSM model --------------------------------------------------------
+tsm.survival.res <- lapply(cjs.mnl.tsm, function(x) {
+    out <- data.frame(t(rbind(data.frame(x$mean), data.frame(x$sd))))
+    rownames(out) <- gsub("[.]", "_", rownames(out))
+    return(out)
+})
+
+tsm.survival.res <- do.call("rbind", tsm.survival.res)
+sp_stat <- t(data.frame(strsplit(rownames(tsm.survival.res), "[.]")))
+tsm.survival.res <- cbind(tsm.survival.res, sp_stat)
+colnames(tsm.survival.res) <- c("Mean", "SD", "Species", "stat")
+statlookup <- data.frame(stat = c("mean_p", "mean_phitsm1", "mean_phitsm2"),
+                         Stat = c("p", "Phi (1)", "Phi (2+)"))
+tsm.survival.res <- merge(tsm.survival.res, statlookup)
+tsm.survival.res <- arrange(tsm.survival.res, Species, Stat) %>%
+    select(Species, Stat, Mean, SD) %>%
+    mutate(Mean = round(Mean, 2), 
+           SD = round(SD, 2))
+
+# get the fit stats out of the BUGS objects and into a dataframe with species names
+fit.stats.tsm <- lapply(cjs.mnl.tsm, function(x){
+    data.frame(fit=x$sims.list$fit, 
+               fit.new=x$sims.list$fit.new)
+})
+
+fit.stats.tsm <- do.call("rbind", fit.stats.tsm)
+sp <- rownames(fit.stats.tsm)
+sp <- gsub("[[:digit:]]", "", sp)
+sp <- gsub("[.]", "", sp)
+fit.stats.tsm$species <- sp
+
+# plot fit against fit.new with the 1:1 line
+ggplot(fit.stats.tsm, aes(x = fit, y = fit.new)) + 
+    geom_point(shape = 1) + 
+    geom_abline(intercept = 0, slope = 1) + 
+    scale_x_continuous(name = "Discrepancy simulated data") + 
+    scale_y_continuous(name = "Discrepancy observed data") + 
+    facet_wrap(~species) + 
+    theme_classic()
+
+ggsave("results/tsm_model_fit.png", width = 12, height = 8)
+
+# get the Bayesian p-values
+p.vals.tsm <- group_by(fit.stats.tsm, species) %>%
+    summarise(p.val.tsm = round(mean(fit.new > fit), 2)) %>%
+    select(p.val.tsm)
+
+p.vals <- cbind(p.vals.time, p.vals.hab, p.vals.constant, p.vals.tsm)
+species.family <- tax_name(query = p.vals$species,get = "family", db = "itis")
+p.vals <- cbind(p.vals, species.family)
+p.vals$family[2:3] <- "Parulidae" # these species were classified differently
+p.vals <- arrange(p.vals, family, species) %>%
+    select(1, 6, 4, 5, 3, 2) 
+test <- abs(p.vals[,3:6] - 0.5)
+p.vals$model <- apply(test, 1, which.min)
+p.vals$model <- factor(p.vals$model, levels = c(1, 2, 3, 4), labels = c("Constant", "TSM", "Habitat", "Time"))
+
+best.mod.count <- group_by(p.vals, model) %>%
+    summarise(count = length(model))
 
 write.csv(habitat.survival.res, "results/habitat_mod.csv")
 write.csv(survival.res, "results/time_mod.csv")
 write.csv(p.vals, "results/model_comparison.csv")
+write.csv(tsm.survival.res, "results/tsm_mod.csv")
+write.csv(constant.survival.res, "results/constant_mod.csv")
