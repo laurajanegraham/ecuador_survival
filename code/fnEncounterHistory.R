@@ -42,7 +42,7 @@ get.other <- function(x) {
     return(x)
 }
 
-EncounterHistory <- function(data, session, band.number, group = NULL) {
+EncounterHistory <- function(data, session, band.number, group = NULL, sessions) {
         require(dplyr)
         # rename session and band number columns for use in below code
         names(data)[which(names(data)==session)]  <- "session.id"
@@ -63,7 +63,14 @@ EncounterHistory <- function(data, session, band.number, group = NULL) {
         
         # Set all NAs to zero
         eh.full[is.na(eh.full)] <- 0
-                
+        
+        # some species are not sampled at all sessions - this fixes it
+        no.rec.sessions <- sessions[which(!sessions %in% colnames(eh.full))]
+        zeroes <- matrix(data = 0, nrow = nrow(eh.full), ncol = length(no.rec.sessions))
+        colnames(zeroes) <- no.rec.sessions
+        eh.full <- cbind(eh.full, zeroes)
+        eh.full <- eh.full[,order(names(eh.full))] 
+        
         # This part summarises and creates one line per species/band.number combo
         eh.counts <- group_by(eh.full, band.id) %>%
                 summarise_each(funs(sum), matches("session")) 
