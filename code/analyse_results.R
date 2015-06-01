@@ -76,6 +76,30 @@ ggplot(sigma, aes(x = sigma)) +
 
 ggsave("results/sigma_identifiable.png", width = 12, height = 8)
 
+# output plot of phi estimates and 95% CRI between each sampling occasion
+phi.est <- lapply(cjs.mnl.time.ran, function(x) {
+    data.frame(sampling.occasion = 1:ncol(x$sims.list$phi),
+               lower = apply(x$sims.list$phi, 2, function(x) quantile(x, 0.025)),
+               upper = apply(x$sims.list$phi, 2, function(x) quantile(x, 0.975)),
+               mean = colMeans(x$sims.list$phi))
+    }
+    )
+    
+phi.est <- do.call("rbind", phi.est)
+sp <- rownames(phi.est)
+sp <- gsub("[[:digit:]]", "", sp)
+sp <- gsub("[.]", "", sp)
+phi.est$species <- sp
+
+ggplot(phi.est, aes(x=sampling.occasion, y=mean)) + 
+    facet_wrap(~species) +
+    geom_errorbar(aes(ymin=lower, ymax=upper), width = 0, col = "gray45") +
+    geom_point(size = 3) + geom_line() + 
+    labs(x = "Sampling session", y = "Survival probability (with 95% CRI)") + 
+    theme_classic()
+
+ggsave("results/time_model_vals.png", width = 12, height = 8)
+
 # Results for model with fixed group effects -----------------------------------
 habitat.survival.res <- lapply(cjs.mnl.habitat, function(x) {
     out <- data.frame(t(rbind(data.frame(x$mean), data.frame(x$sd))))
