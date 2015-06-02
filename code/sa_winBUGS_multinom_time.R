@@ -26,7 +26,7 @@ for (species in species.list$Specie.Name){
         sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
                 select(Band.Number, session_new, habitat)
         
-        sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number", sessions)
+        sp_eh <- EncounterHistory(sp_dat, "session_new", "Band.Number", sessions = sessions)
         
         marr <- sp_eh$m.array
         

@@ -10,7 +10,7 @@ load("results/cjs.mnl.time.ran.rda")
 load("results/cjs.mnl.tsm.rda")
 load("results/cjs.mnl.constant.rda")
 
-# Results for model with randon time effects -----------------------------------
+# Results for model with random time effects -----------------------------------
 survival.res <- lapply(cjs.mnl.time.ran, function(x) {
     out <- data.frame(t(rbind(data.frame(x$mean[-1]), data.frame(x$sd[-1]))))
     rownames(out) <- gsub("[.]", "_", rownames(out))
@@ -81,7 +81,8 @@ phi.est <- lapply(cjs.mnl.time.ran, function(x) {
     data.frame(sampling.occasion = 1:ncol(x$sims.list$phi),
                lower = apply(x$sims.list$phi, 2, function(x) quantile(x, 0.025)),
                upper = apply(x$sims.list$phi, 2, function(x) quantile(x, 0.975)),
-               mean = colMeans(x$sims.list$phi))
+               mean.t = colMeans(x$sims.list$phi), 
+               mean.phi = x$mean$mean.phi)
     }
     )
     
@@ -91,10 +92,11 @@ sp <- gsub("[[:digit:]]", "", sp)
 sp <- gsub("[.]", "", sp)
 phi.est$species <- sp
 
-ggplot(phi.est, aes(x=sampling.occasion, y=mean)) + 
+ggplot(phi.est, aes(x=sampling.occasion, y=mean.t)) + 
     facet_wrap(~species) +
     geom_errorbar(aes(ymin=lower, ymax=upper), width = 0, col = "gray45") +
     geom_point(size = 3) + geom_line() + 
+    geom_hline(aes(yintercept = mean.phi), col = "red") + 
     labs(x = "Sampling session", y = "Survival probability (with 95% CRI)") + 
     theme_classic()
 
@@ -147,6 +149,37 @@ p.vals.hab <- group_by(fit.stats.hab, species) %>%
     summarise(p.val.hab = round(mean(fit.new > fit), 2)) %>%
     select(p.val.hab)
 
+# output plot of phi estimates and 95% CRI between each sampling occasion
+phi.est.hab <- lapply(cjs.mnl.habitat, function(x) {
+    data.frame(habitat = c("Native", "Introduced", "Native shrubs"),
+               mean = c(mean(x$sims.list$mean.phinative), 
+                        mean(x$sims.list$mean.phiintro),
+                        mean(x$sims.list$mean.phiscrub)),
+               lower = c(quantile(x$sims.list$mean.phinative, 0.025), 
+                         quantile(x$sims.list$mean.phiintro, 0.025),
+                         quantile(x$sims.list$mean.phiscrub, 0.025)),
+               upper = c(quantile(x$sims.list$mean.phinative, 0.975), 
+                         quantile(x$sims.list$mean.phiintro, 0.975),
+                         quantile(x$sims.list$mean.phiscrub, 0.975))
+               )
+}
+)
+
+phi.est.hab <- do.call("rbind", phi.est.hab)
+sp <- rownames(phi.est.hab)
+sp <- gsub("[[:digit:]]", "", sp)
+sp <- gsub("[.]", "", sp)
+phi.est.hab$species <- sp
+
+ggplot(phi.est.hab, aes(x=habitat, y=mean)) + 
+    geom_errorbar(aes(ymin=lower, ymax=upper), width = 0.2, col = "gray45") +
+    geom_point(size = 3) + 
+    facet_wrap(~species) +
+    labs(x = "Habitat", y = "Survival probability (with 95% CRI)") + 
+    theme_classic()
+
+ggsave("results/habitat_model_vals.png", width = 12, height = 8)
+
 # Results for constant model ---------------------------------------------------
 constant.survival.res <- lapply(cjs.mnl.constant, function(x) {
     out <- data.frame(t(rbind(data.frame(x$mean), data.frame(x$sd))))
@@ -194,6 +227,28 @@ p.vals.constant <- group_by(fit.stats.constant, species) %>%
     summarise(p.val.constant = round(mean(fit.new > fit), 2))  %>%
     select(p.val.constant)
 
+# output plot of phi estimates and 95% CRI between each sampling occasion
+phi.est.constant <- lapply(cjs.mnl.constant, function(x) {
+    data.frame(mean = x$mean$mean.phi,
+               lower = quantile(x$sims.list$mean.phi, 0.025), 
+               upper = quantile(x$sims.list$mean.phi, 0.975))
+}
+)
+
+phi.est.constant <- do.call("rbind", phi.est.constant)
+sp <- rownames(phi.est.constant)
+sp <- gsub("[[:digit:]]", "", sp)
+sp <- gsub("[.]", "", sp)
+phi.est.constant$species <- sp
+
+ggplot(phi.est.constant, aes(x=species, y=mean)) + 
+    geom_errorbar(aes(ymin=lower, ymax=upper), width = 0.2, col = "gray45") +
+    geom_point(size = 3) + 
+    labs(x = "Species", y = "Survival probability (with 95% CRI)") + 
+    theme_classic() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggsave("results/constant_model_vals.png", width = 12, height = 8)
+
 # Results for TSM model --------------------------------------------------------
 tsm.survival.res <- lapply(cjs.mnl.tsm, function(x) {
     out <- data.frame(t(rbind(data.frame(x$mean), data.frame(x$sd))))
@@ -240,6 +295,31 @@ ggsave("results/tsm_model_fit.png", width = 12, height = 8)
 p.vals.tsm <- group_by(fit.stats.tsm, species) %>%
     summarise(p.val.tsm = round(mean(fit.new > fit), 2)) %>%
     select(p.val.tsm)
+
+# output plot of phi estimates and 95% CRI between each sampling occasion
+phi.est.tsm <- lapply(cjs.mnl.tsm, function(x) {
+    data.frame(cap.period = c("Phi.1", "Phi.2"),
+               mean = c(x$mean$mean.phitsm1, x$mean$mean.phitsm2),
+               lower = c(quantile(x$sims.list$mean.phitsm1, 0.025),
+                         quantile(x$sims.list$mean.phitsm2, 0.025)),
+               upper = c(quantile(x$sims.list$mean.phitsm2, 0.975)))
+}
+)
+
+phi.est.tsm <- do.call("rbind", phi.est.tsm)
+sp <- rownames(phi.est.tsm)
+sp <- gsub("[[:digit:]]", "", sp)
+sp <- gsub("[.]", "", sp)
+phi.est.tsm$species <- sp
+
+ggplot(phi.est.tsm, aes(x=cap.period, y=mean)) + 
+    geom_errorbar(aes(ymin=lower, ymax=upper), width = 0.2, col = "gray45") +
+    geom_point(size = 3) + 
+    facet_wrap(~species, nrow=4) +
+    labs(x = "Species", y = "Survival probability (with 95% CRI)") + 
+    theme_classic() 
+
+ggsave("results/tsm_model_vals.png", width = 12, height = 8)
 
 p.vals <- cbind(p.vals.time, p.vals.hab, p.vals.constant, p.vals.tsm)
 species.family <- tax_name(query = p.vals$species,get = "family", db = "itis")
