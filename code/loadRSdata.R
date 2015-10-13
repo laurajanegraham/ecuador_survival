@@ -1,5 +1,6 @@
 require(dplyr)
 require(lubridate)
+require(ggplot2)
 
 # functions required
 fnLocation <- function(df) {
@@ -41,20 +42,27 @@ samp.dates <- read.csv("data/sampling_dates_ec.csv") %>%
 # get the RS data files
 files <- list.files("data/rs-data/", pattern=".csv", full.names = TRUE)
 
+test <- 
 # load RS data files
-evi <- read.csv(files[2], stringsAsFactors = FALSE) %>%
+evi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="EVI", full.names = TRUE), 
+                               function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
+    filter(complete.cases(.)==TRUE) %>%
     mutate(site=fnLocation(.),
            date=as.Date(gsub("_", "-", substr(system.index, 13, 22))),
            measure="EVI") %>%
     select(site, date, measure, mean) # 825 missing values (52%)
 
-ndvi <- read.csv(files[3], stringsAsFactors = FALSE) %>%
+ndvi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="NDVI", full.names = TRUE), 
+                                function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
+    filter(complete.cases(.)==TRUE) %>%
     mutate(site=fnLocation(.),
            date=as.Date(gsub("_", "-", substr(system.index, 13, 22))),
            measure="NDVI") %>%
     select(site, date, measure, mean) # 765 missing values (48%)
 
-temp <- read.csv(files[4], stringsAsFactors = FALSE) %>%
+temp <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="temp", ignore.case=TRUE, full.names = TRUE), 
+                                function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
+    filter(complete.cases(.)==TRUE) %>%
     mutate(site=fnLocation(.),
            date=as.Date(paste(substr(system.index, 12, 15), 
                               substr(system.index, 16, 17),
@@ -88,7 +96,7 @@ window.dat.allsites$session <- paste0(
     , "_", substr(window.dat.allsites$session, 1, 3))
 
 # create plots of mean RS measurements
-window.dat.plot <- subset(window.dat, window.size %in% c(28, 56, 84))
+window.dat.plot <- subset(window.dat, window.size %in% c(4, 8, 12))
 ggplot(window.dat.plot, aes(x = session, y=mean.val, group=site, colour=site)) + 
     geom_line() + 
     geom_point() + 
