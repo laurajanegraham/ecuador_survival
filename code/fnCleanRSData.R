@@ -1,7 +1,3 @@
-require(dplyr)
-require(lubridate)
-require(ggplot2)
-
 fnLocation <- function(df) {
     factor(df$Id, labels=c("SANA", "LLAV", "MASE", "MAIN"))
 }
