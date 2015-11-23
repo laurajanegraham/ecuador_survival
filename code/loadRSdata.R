@@ -42,7 +42,6 @@ samp.dates <- read.csv("data/sampling_dates_ec.csv") %>%
 # get the RS data files
 files <- list.files("data/rs-data/", pattern=".csv", full.names = TRUE)
 
-test <- 
 # load RS data files
 evi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="EVI", full.names = TRUE), 
                                function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
