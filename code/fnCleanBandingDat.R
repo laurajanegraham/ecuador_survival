@@ -1,7 +1,5 @@
 CleanBandingDat <- function() {
-        require(Hmisc)
-        require(dplyr)
-        require(tidyr)
+
         # read in the table from full_data.mdb and write out to banding_sheet.csv - this
         # gets rid of column attribute issues
         banding.dat <- mdb.get("data/full_data.mdb", tables="Banding Sheet")
