@@ -19,10 +19,7 @@ model {
     for (t in 1:(n.occasions-1)){
         marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
     }
-    # Calculate the number of birds released each year
-    for (t in 1:(n.occasions-1)){
-        r[t] <- sum(marr[t,])
-    }
+
     # Define the cell probabilities of the m-array:
     # Main diagonal
     for (t in 1:(n.occasions-1)){
