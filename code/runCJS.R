@@ -14,6 +14,7 @@
 #       d) temperature as a covariate
 
 #load packages
+require(R2jags)
 require(R2WinBUGS)
 require(mcmcplots)
 require(dplyr)
@@ -28,7 +29,7 @@ source("code/fnCleanBandingDat.R")
 source("code/fnCleanRSData.R")
 source("code/fnEncounterHistory.R")
 source("code/fnKnownStateInits.R")
-source("code/BUGSParallel.R")
+source("code/JAGSParallel.R")
 
 # Load and format banding and remote sensing data ------------------------------
 banding.dat.clean <- CleanBandingDat()
@@ -46,8 +47,6 @@ species.list <- group_by(banding.dat.clean, Specie.Name) %>%
     summarise(count = length(Specie.Name)) %>%
     filter(count > 50)
 
-modelout <- list()
-notrun <- NULL 
 # this will create a list of species where the habitat analysis wasn't run
 # (because it's not present in all 3 habitats)
 
@@ -58,7 +57,13 @@ nb <- 2000
 nc <- 3
 
 for (species in species.list$Specie.Name){
-    
+    # if there are already results for the species (i.e. for a different model), load so they are all together
+    if(file.exists(paste0("results/", species, "_CJS_model_output.rda"))) {
+        load(paste0("results/", species, "_CJS_model_output.rda"))
+    } else {
+        # otherwise create a list to put results into
+        modelout <- list()
+    }
     # get species data ---------------------------------------------------------
     sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
         select(Band.Number, session_new, habitat)
@@ -72,107 +77,113 @@ for (species in species.list$Specie.Name){
     #marr.TSM1 <- sp_eh$m.array.TSM1
     #marr.TSM2 <- sp_eh$m.array.TSM2
     
-    #set up bugs data for each model -------------------------------------------
+    # run the models and output to logfile
+    # Constant/null ----------------------------------------------------------------------------------------
+    write(paste("Null model for ", species, sep=" "), logfile.name, append = TRUE)
+    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    strt <- Sys.time()       
     constant.data <- list(marr = marr, n.occasions = ncol(marr), r = rowSums(marr))
-    #tsm.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr.TSM1))
-    habitat.data <- list(marr.i = marr.gp[["Introduced"]], marr.n = marr.gp[["Native"]],
-                         marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr),
-                         r.i = rowSums(marr.gp[["Introduced"]], r.n = rowSums(marr.gp[["Native"]]), 
-                                       r.s = rowSums(marr.gp[["Scrub"]])))
-    time.data <- list(marr = marr, n.occasions = ncol(marr), r=rowSums(marr))
-    #evi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$evi)
-    #ndvi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$ndvi)
-    #temp.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$temp)
-    
-    # set up parameter initial values ------------------------------------------
     constant.inits <- function(){list(mean.phi = runif(1, 0, 1), 
                                       mean.p = runif(1, 0, 1))}  
+    constant.parameters <- c("mean.p", "mean.phi", "fit", "fit.new")
+    modelout[["null"]] <- JAGSParallel(nc, data=constant.data, inits=constant.inits, params=constant.parameters, 
+                                       model.file="cjs-mnl-fixed.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+    
+#     # TSM --------------------------------------------------------------------------------------------------
+#     write(paste("TSM model for ", species, sep=" "), logfile.name, append = TRUE)
+#     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+#     strt <- Sys.time()       
+#     tsm.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr.TSM1))
 #     tsm.inits <- function(){list(mean.TSM1 = runif(1, 0, 1), 
 #                                  mean.TSM2 = runif(1, 0, 1), 
 #                                  mean.p = runif(1, 0, 1))}  
-     habitat.inits <- function(){list(mean.phiintro = runif(1, 0, 1), 
-                             mean.phinative = runif(1, 0, 1),
-                             mean.phiscrub = runif(1, 0, 1),
-                             mean.p = runif(1, 0, 1))} 
+#     tsm.parameters <- c("mean.p", "mean.phitsm1", "mean.phitsm2","fit", "fit.new")
+#     modelout[["TSM"]] <- JAGSParallel(nc, data=tsm.data, inits=tsm.inits, params=tsm.parameters, 
+#                                       model.file="cjs-mnl-TSM.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+#     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+#     
+    # Habitat --------------------------------------------------------------------------------------------------
+    # Habitat is more complicated because some species are only in two habitats
+    write(paste("Habitat model for ", species, sep=" "), logfile.name, append = TRUE)
+    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    strt <- Sys.time()       
+    if(length(marr.gp)==3) {
+        habitat.data <- list(marr.i = marr.gp[["Introduced"]], marr.n = marr.gp[["Native"]],
+                             marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr),
+                             r.i = rowSums(marr.gp[["Introduced"]], r.n = rowSums(marr.gp[["Native"]]), 
+                                           r.s = rowSums(marr.gp[["Scrub"]])))
+        
+        habitat.inits <- function(){list(mean.phiintro = runif(1, 0, 1), 
+                                         mean.phinative = runif(1, 0, 1),
+                                         mean.phiscrub = runif(1, 0, 1),
+                                         mean.p = runif(1, 0, 1))} 
+        habitat.parameters <- c("mean.p", "mean.phinative", "mean.phiscrub", "mean.phiintro", "fit", "fit.new")
+        modelout[["habitat"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters, 
+                                              model.file="cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+        write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
+                    sep = " "), logfile.name, append = TRUE)
+    }
+    if(length(marr.gp)==2) {
+        # these cases will need a little more manipulation at the analysis stage to label habitat type
+        habitat.data <- list(marr.1 = marr.gp[[1]], marr.2 = marr.gp[[2]], n.occasions = ncol(marr),
+                             r.1 = rowSums(marr.gp[[1]]), r.2 = rowSums(marr.gp[[2]]))
+        
+        habitat.inits <- function(){list(mean.phi1 = runif(1, 0, 1), 
+                                         mean.phi2 = runif(1, 0, 1),
+                                         mean.p = runif(1, 0, 1))} 
+        habitat.parameters <- c("mean.p", "mean.phi1", "mean.phi2", "fit", "fit.new")
+        modelout[["habitat"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters, 
+                                              model.file="cjs-mnl-habitat-2groups.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+        write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
+                    sep = " "), logfile.name, append = TRUE)
+    }
+    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+    
+    # Time -----------------------------------------------------------------------------------------------------
+    write(paste("Time model for ", species, sep=" "), logfile.name, append = TRUE)
+    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    strt <- Sys.time()       
+    time.data <- list(marr = marr, n.occasions = ncol(marr), r=rowSums(marr))
     time.inits <- function(){list(mean.phi = runif(1, 0, 1), 
                                   sigma = runif(1, 0, 5),
                                   mean.p = runif(1, 0, 1))}  
+    time.parameters <- c("phi", "mean.p", "mean.phi", "sigma2", "sigma2.real", "fit", "fit.new")
+    modelout[["time"]] <- JAGSParallel(nc, data=time.data, inits=time.inits, params=time.parameters, 
+                                       model.file="cjs-mnl-ran-time.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+    
+#     # EVI ---------------------------------------------------------------------------------------------------
+#     write(paste("EVI model for ", species, sep=" "), logfile.name, append = TRUE)
+#     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+#     strt <- Sys.time()       
+#     evi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$evi)
 #     timecov.inits <- function(){list(mean.phi = runif(1, 0, 1), 
 #                                      sigma = runif(1, 0, 5), 
 #                                      mean.p = runif(1, 0, 1), 
 #                                      beta = runif(1, -5, 5))}  
-    
-    # set up parameters to monitor
-    constant.parameters <- c("mean.p", "mean.phi", "fit", "fit.new")
-    # tsm.parameters <- c("mean.p", "mean.phitsm1", "mean.phitsm2","fit", "fit.new")
-    habitat.parameters <- c("mean.p", "mean.phinative", "mean.phiscrub", "mean.phiintro", "fit", "fit.new")
-    time.parameters <- c("phi", "mean.p", "mean.phi", "sigma2", "sigma2.real", "fit", "fit.new")
-    # timecov.parameters <- c("phi", "mean.p", "mean.phi", "beta", "sigma2", "sigma2.real", "fit", "fit.new")
-    
-    # run the models and output to logfile
-    # Constant/null
-    write(paste("Null model for ", species, sep=" "), logfile.name, append = TRUE)
-    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    strt <- Sys.time()       
-    modelout[["null"]] <- BUGSParallel(nc, data=constant.data, inits=constant.inits, params=constant.parameters, model.file="cjs-mnl-fixed.bug", 
-                                       n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL)
-    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-    
-#     # TSM
-#     write(paste("TSM model for ", species, sep=" "), logfile.name, append = TRUE)
-#     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-#     strt <- Sys.time()       
-#     modelout[["habitat"]] <- BUGSParallel(nc, data=tsm.data, inits=tsm.inits, params=tsm.parameters, model.file="cjs-mnl-TSM.bug", 
-#                                       n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/")
+#     timecov.parameters <- c("phi", "mean.p", "mean.phi", "beta", "sigma2", "sigma2.real", "fit", "fit.new")
+#     modelout[["evi"]] <- JAGSParallel(nc, data=evi.data, inits=timecov.inits, params=timecov.parameters, 
+#                                       model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
 #     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
 #     
-    # Habitat
-    write(paste("Habitat model for ", species, sep=" "), logfile.name, append = TRUE)
-    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    strt <- Sys.time()       
-    modelout[["habitat"]] <- try(BUGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters, model.file="cjs-mnl-habitat.bug", 
-                                      n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/"))
-    if(class(modelout[["habitat"]]) == "try-error") {
-      write ("Model failed, check species present in all habitats and rerun", 
-             logfile.name, append = TRUE)
-      notrun <- cbind(notrun, species)
-    } else {
-      write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
-                  sep = " "), logfile.name, append = TRUE)
-    }
-    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-    
-    # Time
-    write(paste("Time model for ", species, sep=" "), logfile.name, append = TRUE)
-    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    strt <- Sys.time()       
-    modelout[["time"]] <- BUGSParallel(nc, data=time.data, inits=time.inits, params=time.parameters, model.file="cjs-mnl-ran-time.bug", 
-                                      n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/")
-    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-    
-#     # EVI
-#     write(paste("EVI model for ", species, sep=" "), logfile.name, append = TRUE)
-#     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-#     strt <- Sys.time()       
-#     modelout[["evi"]] <- BUGSParallel(nc, data=evi.data, inits=timecov.inits, params=timecov.parameters, model.file="cjs-mnl-ran-time-cov.bug", 
-#                                        n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/")
-#     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-#     
-#     # NDVI
+#     # NDVI ---------------------------------------------------------------------------------------------------
 #     write(paste("NDVI model for ", species, sep=" "), logfile.name, append = TRUE)
 #     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
 #     strt <- Sys.time()       
-#     modelout[["ndvi"]] <- BUGSParallel(nc, data=ndvi.data, inits=timecov.inits, params=timecov.parameters, model.file="cjs-mnl-ran-time-cov.bug", 
-#                                       n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/")
+#     ndvi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$ndvi)
+#     modelout[["ndvi"]] <- JAGSParallel(nc, data=ndvi.data, inits=timecov.inits, params=timecov.parameters, 
+#                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
 #     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
 #     
-#     # temp
+#     # temp --------------------------------------------------------------------------------------------------
 #     write(paste("Temperature model for ", species, sep=" "), logfile.name, append = TRUE)
 #     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
 #     strt <- Sys.time()       
-#     modelout[["temp"]] <- BUGSParallel(nc, data=temp.data, inits=timecov.inits, params=timecov.parameters, model.file="cjs-mnl-ran-time-cov.bug", 
-#                                       n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/")
+#     temp.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$temp)
+#     modelout[["temp"]] <- JAGSParallel(nc, data=temp.data, inits=timecov.inits, params=timecov.parameters, 
+#                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
 #     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-#     
+     
     save(modelout, file=paste0("results/", species, "_CJS_model_output.rda"))
 }

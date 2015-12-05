@@ -8,7 +8,7 @@ JAGSParallelized = function(Index, jags.seed.vec, inits, model.file, data, param
 
 #jags.seed=random.seed,
 
-JAGSParallel = function(n.cores,data,inits,params,model.file,n.iter,n.burnin,n.thin,DIC=FALSE){
+JAGSParallel = function(n.cores,data,inits,params,model.file,n.chains,n.iter,n.burnin,n.thin,DIC=FALSE){
     # Start snowfall
     sfInit(parallel=TRUE, cpus=n.cores)
     sfLibrary(R2jags)
