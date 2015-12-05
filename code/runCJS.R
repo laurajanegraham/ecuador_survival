@@ -57,10 +57,6 @@ nt <- 3
 nb <- 2000
 nc <- 3
 
-# set working directory - if working on Ubuntu, needs to be where the scripts are, on Windows set to NULL
-# working.directory = '~/.wine/drive_c/temp/Rtmp/' # for ubuntu
-working.directory = NULL # for windows
-
 for (species in species.list$Specie.Name){
     
     # get species data ---------------------------------------------------------
@@ -77,11 +73,13 @@ for (species in species.list$Specie.Name){
     #marr.TSM2 <- sp_eh$m.array.TSM2
     
     #set up bugs data for each model -------------------------------------------
-    constant.data <- list(marr = marr, n.occasions = ncol(marr))
+    constant.data <- list(marr = marr, n.occasions = ncol(marr), r = rowSums(marr))
     #tsm.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr.TSM1))
     habitat.data <- list(marr.i = marr.gp[["Introduced"]], marr.n = marr.gp[["Native"]],
-                                      marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr))
-    time.data <- list(marr = marr, n.occasions = ncol(marr))
+                         marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr),
+                         r.i = rowSums(marr.gp[["Introduced"]], r.n = rowSums(marr.gp[["Native"]]), 
+                                       r.s = rowSums(marr.gp[["Scrub"]])))
+    time.data <- list(marr = marr, n.occasions = ncol(marr), r=rowSums(marr))
     #evi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$evi)
     #ndvi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$ndvi)
     #temp.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$temp)
@@ -117,7 +115,7 @@ for (species in species.list$Specie.Name){
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
     modelout[["null"]] <- BUGSParallel(nc, data=constant.data, inits=constant.inits, params=constant.parameters, model.file="cjs-mnl-fixed.bug", 
-                                       n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL, bugs.directory="D:/WinBUGS14/")
+                                       n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, working.directory=NULL)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
 #     # TSM
