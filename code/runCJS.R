@@ -21,8 +21,9 @@ require(dplyr)
 require(Hmisc)
 require(tidyr)
 require(lubridate)
-library(abind)
-library(snowfall)
+require(abind)
+require(snowfall)
+require(RODBC)
 
 # load functions
 source("code/fnCleanBandingDat.R")
