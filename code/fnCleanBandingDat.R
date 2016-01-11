@@ -1,4 +1,4 @@
-CleanBandingDat <- function() {
+CleanBandingDat <- function(inc.juvenile=TRUE) {
   
   # read in the table from full_data.mdb and write out to banding_sheet.csv - this
   # gets rid of column attribute issues
@@ -9,6 +9,7 @@ CleanBandingDat <- function() {
   # re-read in data
   banding.dat <- read.csv("data/banding_sheet.csv", stringsAsFactors = FALSE)
   
+  if(!inc.juvenile) banding.dat <- filter(banding.dat, Age!="Y")
   # remove records with no species, session or band (at the moment this
   # also limits the temporal extent to that used in the chapter by Boris)
   banding.dat.clean <- filter(banding.dat, Band.Number != 99999, 

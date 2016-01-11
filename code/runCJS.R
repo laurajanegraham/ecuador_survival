@@ -32,7 +32,7 @@ source("code/fnKnownStateInits.R")
 source("code/JAGSParallel.R")
 
 # Load and format banding and remote sensing data ------------------------------
-banding.dat.clean <- CleanBandingDat()
+banding.dat.clean <- CleanBandingDat(inc.juvenile=FALSE)
 sessions <- unique(banding.dat.clean$session_new)
 #RS.dat <- CleanRSData(12)
 
@@ -111,8 +111,8 @@ for (species in species.list$Specie.Name){
     if(length(marr.gp)==3) {
         habitat.data <- list(marr.i = marr.gp[["Introduced"]], marr.n = marr.gp[["Native"]],
                              marr.s = marr.gp[["Scrub"]], n.occasions = ncol(marr),
-                             r.i = rowSums(marr.gp[["Introduced"]], r.n = rowSums(marr.gp[["Native"]]), 
-                                           r.s = rowSums(marr.gp[["Scrub"]])))
+                             r.i = rowSums(marr.gp[["Introduced"]]), r.n = rowSums(marr.gp[["Native"]]), 
+                                           r.s = rowSums(marr.gp[["Scrub"]]))
         
         habitat.inits <- function(){list(mean.phiintro = runif(1, 0, 1), 
                                          mean.phinative = runif(1, 0, 1),
@@ -121,8 +121,6 @@ for (species in species.list$Specie.Name){
         habitat.parameters <- c("mean.p", "mean.phinative", "mean.phiscrub", "mean.phiintro", "fit", "fit.new")
         modelout[["habitat"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters, 
                                               model.file="cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
-        write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
-                    sep = " "), logfile.name, append = TRUE)
     }
     if(length(marr.gp)==2) {
         # these cases will need a little more manipulation at the analysis stage to label habitat type
@@ -135,9 +133,7 @@ for (species in species.list$Specie.Name){
         habitat.parameters <- c("mean.p", "mean.phi1", "mean.phi2", "fit", "fit.new")
         modelout[["habitat"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters, 
                                               model.file="cjs-mnl-habitat-2groups.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
-        write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), 
-                    sep = " "), logfile.name, append = TRUE)
-    }
+        }
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
     # Time -----------------------------------------------------------------------------------------------------
@@ -185,5 +181,5 @@ for (species in species.list$Specie.Name){
 #                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
 #     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
      
-    save(modelout, file=paste0("results/", species, "_CJS_model_output.rda"))
+    save(modelout, file=paste0("results/", species, "_CJS_adult_model_output.rda"))
 }

@@ -3,44 +3,111 @@ require(ggplot2)
 require(R2WinBUGS)
 require(dplyr)
 require(taxize)
+require(mcmcplots)
+require(stringr)
+source("code/fnCleanBandingDat.R")
 
-# load results for each model
-load("results/cjs.mnl.habitat.rda")
-load("results/cjs.mnl.time.ran.rda")
-load("results/cjs.mnl.tsm.rda")
-load("results/cjs.mnl.constant.rda")
+banding.dat.clean <- CleanBandingDat()
+sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')])
+
+# list results files
+files <- list.files("results", pattern="CJS_adult_model_output.rda", full.names = TRUE)
+
+jags2plot <- function(x) {
+    load(x)
+    species <- str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2]
+    phi.null <- data.frame(modelout[[1]]$JAGSoutput$summary[c('mean.p', 'mean.phi'),c('mean', '2.5%','97.5%')])
+    phi.null$model <- "Null"
+    phi.hab <- data.frame(modelout[[2]]$JAGSoutput$summary[-(1:2),c('mean', '2.5%','97.5%')])
+    # need to account for species that haven't been banded in all habitats - done by adding in a row of NAs for the missing habitat
+    if(nrow(phi.hab)==3) {
+        habitats <- filter(sphab, Specie.Name==species) %>% select(habitat) %>% unlist(.)
+        if("Introduced" %in% habitats && "Native" %in% habitats) {
+            phi.hab <- rbind(phi.hab, c(NA,NA,NA))
+        }
+        if("Introduced" %in% habitats && "Scrub" %in% habitats) {
+            phi.hab <- rbind(phi.hab[1:2,], c(NA, NA, NA), phi.hab[3,])
+        }
+        if("Native" %in% habitats && "Scrub" %in% habitats) {
+            phi.hab <- rbind(phi.hab[1,], c(NA, NA, NA), phi.hab[2:3,])
+        }
+    }
+    phi.hab$model <- "Habitat"
+    phi.time <- data.frame(modelout[[3]]$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2.real'),c('mean', '2.5%','97.5%')])
+    phi.time$model <- "Time"
+    param.est <- rbind(phi.null,phi.hab,phi.time)
+    colnames(param.est) <- c("mean", "lci", "uci", "model")
+    
+    param.est$param <- factor(c('pnull', 'phinull', 'phab', 'phiintro', 'phinative', 'phishrub', 'ptime', 'phitime', 'sigma2'),
+                              levels=c('pnull', 'phinull', 'phab', 'phiintro', 'phinative', 'phishrub', 'ptime', 'phitime', 'sigma2'))
+    
+    param.est$Model <- factor(param.est$model, levels=c('Null', 'Habitat', 'Time'))
+    param.est$species <- species
+    return(param.est)
+}
+
+getFit <- function(x) {
+    load(x)
+    species <- str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2]
+    fitnull <- data.frame(fit=modelout[[1]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
+        summarise(p.val = round(mean(fit.new > fit), 2)) %>%
+        mutate(model="Null")
+    fithab <- data.frame(fit=modelout[[2]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
+        summarise(p.val = round(mean(fit.new > fit), 2)) %>%
+        mutate(model="Habitat")
+    fittime <- data.frame(fit=modelout[[3]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
+        summarise(p.val = round(mean(fit.new > fit), 2)) %>%
+        mutate(model="Time")
+    fit <- rbind(fitnull, fithab, fittime) %>%
+        mutate(species=species)
+}
+
+plot.dat <- lapply(files, jags2plot)
+plot.dat <- do.call("rbind", plot.dat)
+
+fit <- lapply(files, getFit)
+fit <- do.call("rbind", fit)
+
+out <- ggplot(plot.dat, aes(x=param, y=mean, colour=Model)) + 
+    geom_point() + 
+    geom_errorbar(aes(ymin=lci, ymax=uci), width=0.1) + 
+    facet_wrap(~species, ncol=3) +
+    xlab(expression("Parameter")) + ylab(expression(paste("Mean"%+-%"95% Credible Interval"))) + 
+    scale_x_discrete(breaks=c('pnull', 'phinull', 'phab', 'phiintro', 'phinative', 'phishrub', 'ptime', 'phitime', 'sigma2'),
+                     labels=c(expression('p'['null']), expression(phi['null']), 
+                              expression('p'['habitat']), expression(phi['introduced']), expression(phi['native']), expression(phi['shrub']),
+                              expression('p'['time']), expression(phi['time'], sigma^2)))
+    
+save_plot(out, filename = "adult_survival.png", base_height = 12, base_width = 20)
 
 # Results for model with random time effects -----------------------------------
-survival.res <- lapply(cjs.mnl.time.ran, function(x) {
-    out <- data.frame(t(rbind(data.frame(x$mean[-1]), data.frame(x$sd[-1]))))
+survival.res <- lapply(modelout, function(x) {
+    out <- data.frame(x$BUGSoutput$summary[,c('mean', '2.5%', '97.5%')])
     rownames(out) <- gsub("[.]", "_", rownames(out))
     return(out)
 })
 
 survival.res <- do.call("rbind", survival.res)
-sp_stat <- t(data.frame(strsplit(rownames(survival.res), "[.]")))
-survival.res <- cbind(survival.res, sp_stat)
-colnames(survival.res) <- c("Mean", "SD", "Species", "stat")
-statlookup <- data.frame(stat = c("mean_p", "mean_phi", "sigma2", "sigma2_real"),
-                         Stat = c("p", "Phi", "Variance (logit)", "Variance (real)"))
+mod_stat <- t(data.frame(strsplit(rownames(survival.res), "[.]")))
+survival.res <- cbind(survival.res, mod_stat)
+colnames(survival.res) <- c('mean', 'lci', 'uci', "model", "stat")
+statlookup <- data.frame(stat = c("mean_p", "mean_phi", "sigma2", "sigma2_real", "beta"),
+                         Stat = c("p", "Phi", "Variance (logit)", "Variance (real)", "Beta"))
 survival.res <- merge(survival.res, statlookup)
-survival.res <- arrange(survival.res, Species, Stat) %>%
-    select(Species, Stat, Mean, SD) %>%
-    mutate(Mean = round(Mean, 2), 
-           SD = round(SD, 2))
+
 
 
 # get the fit stats out of the BUGS objects and into a dataframe with species names
-fit.stats <- lapply(cjs.mnl.time.ran, function(x){
-    data.frame(fit=x$sims.list$fit, 
-               fit.new=x$sims.list$fit.new)
+fit.stats <- lapply(modelout, function(x){
+    data.frame(fit=x$BUGSoutput$sims.list$fit, 
+               fit.new=x$BUGSoutput$sims.list$fit.new)
 })
 
 fit.stats <- do.call("rbind", fit.stats)
-sp <- rownames(fit.stats)
-sp <- gsub("[[:digit:]]", "", sp)
-sp <- gsub("[.]", "", sp)
-fit.stats$species <- sp
+model <- rownames(fit.stats)
+model <- gsub("[[:digit:]]", "", model)
+model <- gsub("[.]", "", model)
+fit.stats$model <- model
 
 # plot fit against fit.new with the 1:1 line
 ggplot(fit.stats, aes(x = fit, y = fit.new)) + 
@@ -48,14 +115,14 @@ ggplot(fit.stats, aes(x = fit, y = fit.new)) +
     geom_abline(intercept = 0, slope = 1) + 
     scale_x_continuous(name = "Discrepancy simulated data") + 
     scale_y_continuous(name = "Discrepancy observed data") + 
-    facet_wrap(~species) + 
+    facet_wrap(~model) + 
     theme_classic()
 
 ggsave("results/time_model_fit.png", width = 12, height = 8)
 
 # get the Bayesian p-values
-p.vals.time <- group_by(fit.stats, species) %>%
-    summarise(p.val.time = round(mean(fit.new > fit), 2))
+p.vals <- group_by(fit.stats, model) %>%
+    summarise(p.val = round(mean(fit.new > fit), 2))
 
 # get and plot the posterior distribution for sigma (to check it's defined)
 sigma <- lapply(cjs.mnl.time.ran, function(x) {
