@@ -33,7 +33,7 @@ source("code/fnKnownStateInits.R")
 source("code/JAGSParallel.R")
 
 # Load and format banding and remote sensing data ------------------------------
-banding.dat.clean <- CleanBandingDat(inc.juvenile=TRUE)
+banding.dat.clean <- CleanBandingDat(inc.juvenile=FALSE)
 sessions <- unique(banding.dat.clean$session_new)
 #RS.dat <- CleanRSData(12)
 
@@ -191,5 +191,5 @@ for (species in species.list$Specie.Name){
 #                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
 #     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
      
-    save(modelout, file=paste0("results/", species, "_CJS_adult_model_output.rda"))
+    save(modelout, file=paste0("results/", species, "_CJS_nojuv_model_output.rda"))
 }
