@@ -10,12 +10,9 @@ source("code/fnCleanBandingDat.R")
 banding.dat.clean <- CleanBandingDat()
 sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')])
 
-# list results files
-files <- list.files("results", pattern="CJS_adult_model_output.rda", full.names = TRUE)
-
 jags2plot <- function(x) {
     load(x)
-    species <- str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2]
+    species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
     phi.null <- data.frame(modelout[[1]]$JAGSoutput$summary[c('mean.p', 'mean.phi'),c('mean', '2.5%','97.5%')])
     phi.null$model <- "Null"
     phi.hab <- data.frame(modelout[[2]]$JAGSoutput$summary[-(1:2),c('mean', '2.5%','97.5%')])
@@ -48,27 +45,30 @@ jags2plot <- function(x) {
 
 getFit <- function(x) {
     load(x)
-    species <- str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2]
+    species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
     fitnull <- data.frame(fit=modelout[[1]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
         summarise(p.val = round(mean(fit.new > fit), 2)) %>%
         mutate(model="Null")
-    fithab <- data.frame(fit=modelout[[2]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
+    fithab <- data.frame(fit=modelout[[2]]$JAGSoutput$sims.list$fit, fit.new=modelout[[2]]$JAGSoutput$sims.list$fit.new) %>%
         summarise(p.val = round(mean(fit.new > fit), 2)) %>%
         mutate(model="Habitat")
-    fittime <- data.frame(fit=modelout[[3]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
+    fittime <- data.frame(fit=modelout[[3]]$JAGSoutput$sims.list$fit, fit.new=modelout[[3]]$JAGSoutput$sims.list$fit.new) %>%
         summarise(p.val = round(mean(fit.new > fit), 2)) %>%
         mutate(model="Time")
     fit <- rbind(fitnull, fithab, fittime) %>%
         mutate(species=species)
 }
 
-plot.dat <- lapply(files, jags2plot)
-plot.dat <- do.call("rbind", plot.dat)
+# list results files
+fullmod.files <- list.files("results", pattern="CJS_full_model_output.rda", full.names = TRUE)
 
-fit <- lapply(files, getFit)
-fit <- do.call("rbind", fit)
+fullmod.dat <- lapply(fullmod.files, jags2plot)
+fullmod.dat <- do.call("rbind", fullmod.dat)
 
-out <- ggplot(plot.dat, aes(x=param, y=mean, colour=Model)) + 
+fullmod.fit <- lapply(fullmod.files, getFit)
+fullmod.fit <- do.call("rbind", fullmod.fit)
+
+out <- ggplot(fullmod.dat, aes(x=param, y=mean, colour=Model)) + 
     geom_point() + 
     geom_errorbar(aes(ymin=lci, ymax=uci), width=0.1) + 
     facet_wrap(~species, ncol=3) +
