@@ -34,10 +34,11 @@ fnTimeWindowAllSites <- function(df, days) {
 }
 
 # load the sample dates to create windows from
-samp.dates <- read.csv("data/sampling_dates_ec.csv") %>%
-    mutate(session=substr(rownames(.), 1, 10)) %>%
-    arrange(session) %>%
-    mutate(beg=as.Date(beg), end=as.Date(end)) 
+banding.dat <- CleanBandingDat()
+samp.dates <- filter(banding.dat, Session!="") %>%
+    group_by(Session, Location) %>%
+    summarise(beg=min(Date),
+              end=max(Date))
 
 # get the RS data files
 files <- list.files("data/rs-data/", pattern=".csv", full.names = TRUE)
