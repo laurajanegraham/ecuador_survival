@@ -21,8 +21,9 @@ require(dplyr)
 require(Hmisc)
 require(tidyr)
 require(lubridate)
-library(abind)
-library(snowfall)
+require(abind)
+require(snowfall)
+require(RODBC)
 
 # load functions
 source("code/fnCleanBandingDat.R")
@@ -47,15 +48,6 @@ species.list <- group_by(banding.dat.clean, Specie.Name) %>%
     summarise(count = length(Specie.Name)) %>%
     filter(count > 50)
 
-# this will create a list of species where the habitat analysis wasn't run
-# (because it's not present in all 3 habitats)
-
-# same MCMC options for each model - may need to think about changing this
-ni <- 10000
-nt <- 3
-nb <- 2000
-nc <- 3
-
 for (species in species.list$Specie.Name){
     # if there are already results for the species (i.e. for a different model), load so they are all together
     if(file.exists(paste0("results/", species, "_CJS_model_output.rda"))) {
@@ -79,6 +71,12 @@ for (species in species.list$Specie.Name){
     
     # run the models and output to logfile
     # Constant/null ----------------------------------------------------------------------------------------
+    # MCMC options
+    ni <- 10000
+    nt <- 3
+    nb <- 2000
+    nc <- 3
+    
     write(paste("Null model for ", species, sep=" "), logfile.name, append = TRUE)
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
@@ -105,6 +103,12 @@ for (species in species.list$Specie.Name){
 #     
     # Habitat --------------------------------------------------------------------------------------------------
     # Habitat is more complicated because some species are only in two habitats
+    # MCMC options
+    ni <- 50000
+    nt <- 3
+    nb <- 10000
+    nc <- 3
+    
     write(paste("Habitat model for ", species, sep=" "), logfile.name, append = TRUE)
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
@@ -137,6 +141,12 @@ for (species in species.list$Specie.Name){
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
     # Time -----------------------------------------------------------------------------------------------------
+    # MCMC options
+    ni <- 100000
+    nt <- 3
+    nb <- 20000
+    nc <- 3
+    
     write(paste("Time model for ", species, sep=" "), logfile.name, append = TRUE)
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
@@ -181,5 +191,5 @@ for (species in species.list$Specie.Name){
 #                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
 #     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
      
-    save(modelout, file=paste0("results/", species, "_CJS_adult_model_output.rda"))
+    save(modelout, file=paste0("results/", species, "_CJS_nojuv_model_output.rda"))
 }
