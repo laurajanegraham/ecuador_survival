@@ -29,40 +29,37 @@ pars <- lapply(files, function(x) {
     return(pars.x)
 })
 
-species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
+species <- gsub("_", " ", str_match(files,pattern="results/(\\w+.\\w+)_CJS")[,2])
 names(pars) <- species
 pars.all <- do.call("rbind", pars)
 pars.all$species <- unlist(lapply(strsplit(rownames(pars.all), split="[.]"), function(x) x[1]))
 
-dat.null <- filter(pars.all, model=="null")
-ggplot(dat.null,aes(x=draw,y=estimate,col=as.factor(chain))) + 
+plot.null <- ggplot(filter(pars.all, model=="null"),aes(x=draw,y=estimate,col=as.factor(chain))) + 
     geom_line() + 
     facet_grid(species~par, scales = "free") + 
     theme_classic() + 
     labs(col="Chain") + 
     ggtitle("Null Model")
 
-ggsave("results/convergence_null_mod.pdf", height=15)
+ggsave("results/convergence_null_mod.pdf", plot=plot.null, height=15)
 
-dat.hab <- filter(pars.all, model=="habitat")
-ggplot(dat.hab,aes(x=draw,y=estimate,col=as.factor(chain))) + 
+plot.hab <- ggplot(filter(pars.all, model=="habitat"),aes(x=draw,y=estimate,col=as.factor(chain))) + 
     geom_line() + 
     facet_grid(species~par, scales = "free") + 
     theme_classic() + 
     labs(col="Chain") + 
     ggtitle("Habitat model")
 
-ggsave("results/convergence_habitat_mod.pdf", height=15)
+ggsave("results/convergence_habitat_mod.pdf", plot=plot.hab, height=15)
 
-dat.time <- filter(pars.all, model=="time")
-ggplot(dat.time,aes(x=draw,y=estimate,col=as.factor(chain))) + 
+plot.time <- ggplot(filter(pars.all, model=="time"),aes(x=draw,y=estimate,col=as.factor(chain))) + 
     geom_line() + 
     facet_grid(species~par, scales = "free") + 
     theme_classic() + 
     labs(col="Chain") + 
     ggtitle("Null Model")
 
-ggsave("results/convergence_time_mod.pdf", height=15)
+ggsave("results/convergence_time_mod.pdf", plot=plot.time, height=15)
 
 
 
