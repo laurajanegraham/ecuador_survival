@@ -41,14 +41,31 @@ sessions <- unique(banding.dat.clean$session_new)
 logfile.name <- paste0("logs/winbugs_log_", Sys.Date(), ".txt")
 file.create(logfile.name)
 
-# get a count of how many individual captures exist for each species and then 
-# use those species with more than 100 for the initial analyses (there are 10 of
-# these species)
-species.list <- group_by(banding.dat.clean, Specie.Name) %>%
-    summarise(count = length(Specie.Name)) %>%
-    filter(count > 50)
+# Here we create a count of recaptures (how many individuals captured once, twice ... n times)
+dat_summary <- group_by(banding.dat.clean, Specie.Name, Band.Number) %>%
+    summarise(recap=n()-1)
 
-for (species in species.list$Specie.Name){
+dat_recaps <- mutate(dat_summary, 
+                     N=1) %>%
+    spread(recap, N) %>%
+    select(-Band.Number) %>%
+    group_by(Specie.Name) %>%
+    summarise_each(funs(sum(., na.rm=TRUE))) %>%
+    mutate(nind=rowSums(.[-1]))
+
+dat_nind <- group_by(dat_summary, Specie.Name) %>%
+    summarise(nind=n())
+
+dat_recaps$recaps <- rowSums(dat_recaps[,-c(1, 2, ncol(dat_recaps))])
+
+# we will model the survival for any species for which 2 or more individuals 
+# have recaptures. This is likely to be not enough, but we can assess by 
+# checking convergence and precision of estimates. The information in this table
+# can be put into the paper
+usable_dat <- filter(dat_recaps, recaps > 1)
+species.list <- usable_dat$Specie.Name
+
+for (species in species.list){
     # if there are already results for the species (i.e. for a different model), load so they are all together
     if(file.exists(paste0("results/", species, "_CJS_model_output.rda"))) {
         load(paste0("results/", species, "_CJS_model_output.rda"))
@@ -193,3 +210,6 @@ for (species in species.list$Specie.Name){
      
     save(modelout, file=paste0("results/", species, "_CJS_nojuv_model_output.rda"))
 }
+
+# runs the code to check model convergence (output is plots of model convergence and the max rhat value)
+source("code/check_convergence.R")
