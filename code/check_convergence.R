@@ -61,5 +61,18 @@ plot.time <- ggplot(filter(pars.all, model=="time"),aes(x=draw,y=estimate,col=as
 
 ggsave("results/convergence_time_mod.pdf", plot=plot.time, height=15)
 
+# Here we are extracting all of the summaries and checking the G-R rhat is less
+# than 1.1 for all estimated parameters
+summaries <- lapply(files, function(x) {
+    load(x)
+    par.sum <- lapply(modelout, function(y) {
+        y$JAGSoutput$summary
+    })
+    par.sum <- do.call("rbind", par.sum)
+})
 
-
+summaries <- do.call("rbind", summaries)
+max(summaries[,8]) 
+# if this is less than 1.1 then all parameters for all species and models
+# converged. If it is not, then will need to make this code better so that we
+# can identify which species/model did not converge.
