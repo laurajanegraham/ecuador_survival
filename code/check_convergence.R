@@ -19,7 +19,7 @@ extract_par <- function(mod) {
     return(res)
 }
 
-files <- list.files("results", pattern="CJS_full", full.names = TRUE)
+files <- list.files("results", pattern="CJS_nojuv", full.names = TRUE)
 
 pars <- lapply(files, function(x) {
     load(x)
@@ -41,7 +41,7 @@ plot.null <- ggplot(filter(pars.all, model=="null"),aes(x=draw,y=estimate,col=as
     labs(col="Chain") + 
     ggtitle("Null Model")
 
-ggsave("results/convergence_null_mod.pdf", plot=plot.null, height=15)
+ggsave("results/nojuv_convergence_null_mod.pdf", plot=plot.null, height=15)
 
 plot.hab <- ggplot(filter(pars.all, model=="habitat"),aes(x=draw,y=estimate,col=as.factor(chain))) + 
     geom_line() + 
@@ -50,7 +50,7 @@ plot.hab <- ggplot(filter(pars.all, model=="habitat"),aes(x=draw,y=estimate,col=
     labs(col="Chain") + 
     ggtitle("Habitat model")
 
-ggsave("results/convergence_habitat_mod.pdf", plot=plot.hab, height=15)
+ggsave("results/nojuv_convergence_habitat_mod.pdf", plot=plot.hab, height=15)
 
 plot.time <- ggplot(filter(pars.all, model=="time"),aes(x=draw,y=estimate,col=as.factor(chain))) + 
     geom_line() + 
@@ -59,7 +59,7 @@ plot.time <- ggplot(filter(pars.all, model=="time"),aes(x=draw,y=estimate,col=as
     labs(col="Chain") + 
     ggtitle("Null Model")
 
-ggsave("results/convergence_time_mod.pdf", plot=plot.time, height=15)
+ggsave("results/nojuv_convergence_time_mod.pdf", plot=plot.time, height=15)
 
 # Here we are extracting all of the summaries and checking the G-R rhat is less
 # than 1.1 for all estimated parameters

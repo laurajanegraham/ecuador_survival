@@ -1,12 +1,13 @@
 # load packages
-require(ggplot2)
-require(R2WinBUGS)
-require(dplyr)
-require(tidyr)
-require(taxize)
-require(mcmcplots)
-require(stringr)
-require(Hmisc)
+library(ggplot2)
+library(R2WinBUGS)
+library(dplyr)
+library(tidyr)
+library(taxize)
+library(mcmcplots)
+library(stringr)
+library(Hmisc)
+library(cowplot)
 
 source("code/fnCleanBandingDat.R")
 
@@ -16,11 +17,10 @@ sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')])
 jags2plot <- function(x) {
     load(x)
     species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
-    phi.null <- data.frame(modelout[[1]]$JAGSoutput$summary[c('mean.p', 'mean.phi'),c('mean', '2.5%','97.5%')])
-    phi.null$model <- "Null"
-    phi.hab <- data.frame(modelout[[2]]$JAGSoutput$summary[-(1:2),c('mean', '2.5%','97.5%')])
+    phi.null <- data.frame(modelout$null$JAGSoutput$summary[c('mean.p', 'mean.phi'),c('mean', '2.5%','97.5%')])
+    phi.hab <- data.frame(modelout$habitat$JAGSoutput$summary[-(1:2),c('mean', '2.5%','97.5%')])
     # need to account for species that haven't been banded in all habitats - done by adding in a row of NAs for the missing habitat
-    if(nrow(phi.hab)==3) {
+    if(nrow(phi.hab)<=3) {
         habitats <- filter(sphab, Specie.Name==species) %>% select(habitat) %>% unlist(.)
         if("Introduced" %in% habitats && "Native" %in% habitats) {
             phi.hab <- rbind(phi.hab, c(NA,NA,NA))
@@ -31,9 +31,14 @@ jags2plot <- function(x) {
         if("Native" %in% habitats && "Scrub" %in% habitats) {
             phi.hab <- rbind(phi.hab[1,], c(NA, NA, NA), phi.hab[2:3,])
         }
+        if(nrow(phi.hab)==0) {
+          phi.hab <- data.frame(c(NA, NA, NA, NA), c(NA, NA, NA, NA), c(NA, NA, NA, NA))
+          names(phi.hab) <- names(phi.null)
+        }
     }
+    phi.time <- data.frame(modelout$time$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2.real'),c('mean', '2.5%','97.5%')])
+    phi.null$model <- "Null"
     phi.hab$model <- "Habitat"
-    phi.time <- data.frame(modelout[[3]]$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2.real'),c('mean', '2.5%','97.5%')])
     phi.time$model <- "Time"
     param.est <- rbind(phi.null,phi.hab,phi.time)
     colnames(param.est) <- c("mean", "lci", "uci", "model")
@@ -49,13 +54,13 @@ jags2plot <- function(x) {
 getFit <- function(x) {
     load(x)
     species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
-    fitnull <- data.frame(fit=modelout[[1]]$JAGSoutput$sims.list$fit, fit.new=modelout[[1]]$JAGSoutput$sims.list$fit.new) %>%
+    fitnull <- data.frame(fit=modelout$null$JAGSoutput$sims.list$fit, fit.new=modelout$null$JAGSoutput$sims.list$fit.new) %>%
         summarise(p.val = round(mean(fit.new > fit), 2)) %>%
         mutate(model="Null")
-    fithab <- data.frame(fit=modelout[[2]]$JAGSoutput$sims.list$fit, fit.new=modelout[[2]]$JAGSoutput$sims.list$fit.new) %>%
+    fithab <- data.frame(fit=modelout$habitat$JAGSoutput$sims.list$fit, fit.new=modelout$habitat$JAGSoutput$sims.list$fit.new) %>%
         summarise(p.val = round(mean(fit.new > fit), 2)) %>%
         mutate(model="Habitat")
-    fittime <- data.frame(fit=modelout[[3]]$JAGSoutput$sims.list$fit, fit.new=modelout[[3]]$JAGSoutput$sims.list$fit.new) %>%
+    fittime <- data.frame(fit=modelout$time$JAGSoutput$sims.list$fit, fit.new=modelout$time$JAGSoutput$sims.list$fit.new) %>%
         summarise(p.val = round(mean(fit.new > fit), 2)) %>%
         mutate(model="Time")
     fit <- rbind(fitnull, fithab, fittime) %>%
@@ -85,22 +90,20 @@ getRes <- function(fname) {
     return(list(dat=dat, fit=fit, plots=plots))
 }
 
-fullmod <- getRes("CJS_full")
-adultmod <- getRes("CJS_nojuv")
+mod <- getRes("CJS_nojuv")
 
-save_plot(adultmod$plots, filename = "adult_survival.png", base_height = 12, base_width = 20)
-save_plot(fullmod$plots, filename = "all_survival.png", base_height = 12, base_width = 20)
+save_plot(mod$plots, filename = "figures/adult_survival.png", base_height = 12, base_width = 20)
 
-fullfit <- spread(fullmod$fit, model, p.val)
-adultfit <- spread(adultmod$fit, model, p.val)
+fit <- spread(mod$fit, model, p.val)
 
-comp <- merge(fullfit, adultfit, by="species", all=TRUE)
-comp$bestmod <- apply(comp[2:7], 1, function(x) {
+fit$bestmod <- apply(fit[2:4], 1, function(x) {
     x <- 0.5-x
     names(which.min(abs(x)))
 })
 
 
-write.csv(comp, file="results/full_comparison.csv")
+write.csv(fit, file="results/model_comparison.csv")
 
+write.csv(mod$dat[which(complete.cases(mod$dat)),], file="results/nojuv_raw_results.csv")
+write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
 

@@ -32,28 +32,38 @@ source("code/fnEncounterHistory.R")
 source("code/fnKnownStateInits.R")
 source("code/JAGSParallel.R")
 
+# change this depending on whether data should be grouped or for individual species
+grouped = TRUE
+
 # Load and format banding and remote sensing data ------------------------------
 banding.dat.clean <- CleanBandingDat(inc.juvenile=FALSE)
 sessions <- unique(banding.dat.clean$session_new)
-#RS.dat <- CleanRSData(12)
+bird_groups <- read.csv("data/bird_groups_AN.csv")
+banding.dat.clean <- merge(banding.dat.clean, bird_groups, by.x="Specie.Name", by.y="SP.")
 
 # this is the log file that will record how long each model run took. 
 logfile.name <- paste0("logs/winbugs_log_", Sys.Date(), ".txt")
 file.create(logfile.name)
 
 # Here we create a count of recaptures (how many individuals captured once, twice ... n times)
-dat_summary <- group_by(banding.dat.clean, Specie.Name, Band.Number) %>%
+if(grouped) { 
+  banding.dat.clean$tax_level <- banding.dat.clean$Group
+} else {
+  banding.dat.clean$tax_level <- banding.dat.clean$Specie.Name
+}
+
+dat_summary <- group_by(banding.dat.clean, tax_level, Band.Number) %>%
     summarise(recap=n()-1)
 
 dat_recaps <- mutate(dat_summary, 
                      N=1) %>%
     spread(recap, N) %>%
     select(-Band.Number) %>%
-    group_by(Specie.Name) %>%
+    group_by(tax_level) %>%
     summarise_each(funs(sum(., na.rm=TRUE))) %>%
     mutate(nind=rowSums(.[-1]))
 
-dat_nind <- group_by(dat_summary, Specie.Name) %>%
+dat_nind <- group_by(dat_summary, tax_level) %>%
     summarise(nind=n())
 
 dat_recaps$recaps <- rowSums(dat_recaps[,-c(1, 2, ncol(dat_recaps))])
@@ -63,7 +73,7 @@ dat_recaps$recaps <- rowSums(dat_recaps[,-c(1, 2, ncol(dat_recaps))])
 # checking convergence and precision of estimates. The information in this table
 # can be put into the paper
 usable_dat <- filter(dat_recaps, recaps > 1)
-species.list <- usable_dat$Specie.Name
+species.list <- usable_dat$tax_level
 
 for (species in species.list){
     # if there are already results for the species (i.e. for a different model), load so they are all together
@@ -74,7 +84,7 @@ for (species in species.list){
         modelout <- list()
     }
     # get species data ---------------------------------------------------------
-    sp_dat <- filter(banding.dat.clean, Specie.Name == species) %>%
+    sp_dat <- filter(banding.dat.clean, tax_level == species) %>%
         select(Band.Number, session_new, habitat)
     
     # create encounter histories -----------------------------------------------
