@@ -3,15 +3,15 @@ CleanBandingDat <- function(inc.juvenile=TRUE) {
   # read in the table from full_data.mdb and write out to banding_sheet.csv - this
   # gets rid of column attribute issues
   
-  if(Sys.info()['sysname']=="Windows") {
-    conn <- odbcConnectAccess2007(path.expand("D:/ecuador_survival/data/full_data.mdb")) 
-    banding.dat <- sqlFetch(conn, "Banding Sheet") 
-    odbcClose(conn)
-  } else {
-    banding.dat <- mdb.get("data/full_data.mdb", tables="Banding Sheet")    
-  }
-  
-  write.csv(banding.dat, file="data/banding_sheet.csv")
+#   if(Sys.info()['sysname']=="Windows") {
+#     conn <- odbcConnectAccess2007(path.expand("D:/ecuador_survival/data/full_data.mdb")) 
+#     banding.dat <- sqlFetch(conn, "Banding Sheet") 
+#     odbcClose(conn)
+#   } else {
+#     banding.dat <- mdb.get("data/full_data.mdb", tables="Banding Sheet")    
+#   }
+#   
+#   write.csv(banding.dat, file="data/banding_sheet.csv")
   
   # re-read in data
   banding.dat <- read.csv("data/banding_sheet.csv", stringsAsFactors = FALSE)

@@ -15,23 +15,26 @@ fnTimeWindowAllSites <- function(df, days, samp.dates) {
 
 CleanRSData <- function(window) {
     # load the sample dates to create windows from
-    samp.dates <- read.csv("data/sampling_dates_ec.csv") %>%
-        mutate(session=substr(rownames(.), 1, 10)) %>%
-        arrange(session) %>%
-        mutate(beg=as.Date(beg), end=as.Date(end)) 
+  samp.dates <- read.csv("data/banding_sheet.csv", stringsAsFactors = FALSE) %>% 
+    group_by(Session, Location) %>%
+    arrange(Session, Location) %>%
+    summarise(beg = min(as.Date(Date)), end = max(as.Date(Date))) %>%
+    select(beg, end, site=Location, session=Session)
 
     # load RS data files
-    evi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="EVI", full.names = TRUE), 
+    evi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="evi", full.names = TRUE), 
                                    function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
-        filter(complete.cases(.)==TRUE) %>%
+      select(Id, system.index, mean) %>%  
+      filter(complete.cases(.)==TRUE) %>%
         mutate(site=fnLocation(.),
                date=as.Date(gsub("_", "-", substr(system.index, 13, 22))),
                measure="EVI") %>%
         select(site, date, measure, mean) # 825 missing values (52%)
     
-    ndvi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="NDVI", full.names = TRUE), 
+    ndvi <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="ndvi", full.names = TRUE), 
                                     function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
-        filter(complete.cases(.)==TRUE) %>%
+      select(Id, system.index, mean) %>%   
+      filter(complete.cases(.)==TRUE) %>%
         mutate(site=fnLocation(.),
                date=as.Date(gsub("_", "-", substr(system.index, 13, 22))),
                measure="NDVI") %>%
@@ -39,7 +42,8 @@ CleanRSData <- function(window) {
     
     temp <- do.call("rbind", lapply(list.files("data/rs-data/", pattern="temp", ignore.case=TRUE, full.names = TRUE), 
                                     function(x) read.csv(x, stringsAsFactors = FALSE))) %>%
-        filter(complete.cases(.)==TRUE) %>%
+      select(Id, system.index, mean) %>%   
+      filter(complete.cases(.)==TRUE) %>%
         mutate(site=fnLocation(.),
                date=as.Date(paste(substr(system.index, 12, 15), 
                                   substr(system.index, 16, 17),
