@@ -5,7 +5,6 @@ model {
         logit(phi[t]) <- mu + beta*x[t] + epsilon[t]
         epsilon[t] ~ dnorm(0, tau)
         p[t] <- mean.p
-        #phi.est[t] <- 1 / (1+exp(-mu-epsilon[t])) # Yearly survival
     }
     mean.phi ~ dunif(0, 1)             # Prior for mean survival
     mu <- log(mean.phi / (1-mean.phi)) # Logit transformation

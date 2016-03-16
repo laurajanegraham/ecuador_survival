@@ -2,7 +2,7 @@
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-        logit(phi[t]) <- mu + epsilon[t]
+        logit(phi[t]) <- mu + beta1*x1[t] + beta2*x2[t] + beta3*x1[t]*x2[t] + epsilon[t]
         epsilon[t] ~ dnorm(0, tau)
         p[t] <- mean.p
     }
@@ -11,7 +11,11 @@ model {
     sigma ~ dunif(0, 5)                # Prior for standard deviation
     tau <- pow(sigma, -2)
     sigma2 <- pow(sigma, 2)
-    # Temporal variance on real scale
+    beta1 ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+	beta2 ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+	beta3 ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+    
+	# Temporal variance on real scale
     sigma2.real <- sigma2 * pow(mean.phi, 2) * pow((1-mean.phi), 2) 
     mean.p ~ dunif(0, 1)                   # Prior for mean recapture
     # Define the multinomial likelihood
