@@ -1,5 +1,5 @@
 JAGSParallelized = function(Index, jags.seed.vec, inits, model.file, data, params, n.thin, n.iter, n.burnin, DIC){
-    RNGset = c("Mersenne-Twister","Marsaglia-Multicarry","Super-Duper","Knuth-TAOCP-2002","Knuth-TAOCP","Wichmann-Hill","L'Ecuyer-CMRG")
+    RNGset = c("Super-Duper","Knuth-TAOCP-2002","Wichmann-Hill","Knuth-TAOCP","L'Ecuyer-CMRG","Mersenne-Twister","Marsaglia-Multicarry")
     set.seed(1,kind=RNGset[Index])
     random.seed = runif(1,1,1e6)
     Jags = jags(inits=inits, n.chains=1, model.file=model.file, data=data, parameters.to.save=params, n.thin=n.thin, n.iter=n.iter, n.burnin=n.burnin, DIC=DIC)
