@@ -176,12 +176,8 @@ for (species in species.list){
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
     evi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$evi, r=rowSums(marr))
-    timecov.inits <- function(){list(mean.phi = runif(1, 0, 1), 
-                                     sigma = runif(1, 0, 5), 
-                                     mean.p = runif(1, 0, 1), 
-                                     beta = runif(1, -5, 5))}  
     timecov.parameters <- c("phi", "mean.p", "mean.phi", "beta", "sigma2", "sigma2.real", "fit", "fit.new")
-    modelout[["evi"]] <- JAGSParallel(nc, data=evi.data, inits=timecov.inits, params=timecov.parameters, 
+    modelout[["evi"]] <- JAGSParallel(nc, data=evi.data, inits=time.inits, params=timecov.parameters, 
                                       model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
@@ -190,7 +186,7 @@ for (species in species.list){
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
     temp.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$temp, r=rowSums(marr))
-    modelout[["temp"]] <- JAGSParallel(nc, data=temp.data, inits=timecov.inits, params=timecov.parameters, 
+    modelout[["temp"]] <- JAGSParallel(nc, data=temp.data, inits=time.inits, params=timecov.parameters, 
                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
      
@@ -202,7 +198,7 @@ for (species in species.list){
     strt <- Sys.time()       
     evitemp.data <- list(marr = marr, n.occasions = ncol(marr), x1 = RS.dat$evi, x2 = RS.dat$temp, r=rowSums(marr))
     evitemp.parameters <- c("phi", "mean.p", "mean.phi", "beta1", "beta2", "sigma2", "sigma2.real", "fit", "fit.new")
-    modelout[["evi_temp"]] <- JAGSParallel(nc, data=evitemp.data, inits=timecov.inits, params=timecov.parameters, 
+    modelout[["evi_temp"]] <- JAGSParallel(nc, data=evitemp.data, inits=time.inits, params=evitemp.parameters, 
                                        model.file="D:/ecuador_survival/cjs-mnl-ran-time-2cov.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
@@ -210,10 +206,10 @@ for (species in species.list){
     write(paste("EVI + Temperature model for ", species, sep=" "), logfile.name, append = TRUE)
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
-    evitemp.data <- list(marr = marr, n.occasions = ncol(marr), x1 = RS.dat$evi, x2 = RS.dat$temp, r=rowSums(marr))
-    evitemp.parameters <- c("phi", "mean.p", "mean.phi", "beta1", "beta2", "beta3", "sigma2", "sigma2.real", "fit", "fit.new")
-    modelout[["evi_temp_int"]] <- JAGSParallel(nc, data=evitemp.data, inits=timecov.inits, params=timecov.parameters, 
-                                       model.file="cjs-mnl-ran-time-2cov.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    evitempint.data <- list(marr = marr, n.occasions = ncol(marr), x1 = RS.dat$evi, x2 = RS.dat$temp, r=rowSums(marr))
+    evitempint.parameters <- c("phi", "mean.p", "mean.phi", "beta1", "beta2", "beta3", "sigma2", "sigma2.real", "fit", "fit.new")
+    modelout[["evi_temp_int"]] <- JAGSParallel(nc, data=evitempint.data, inits=time.inits, params=evitempint.parameters, 
+                                       model.file="cjs-mnl-ran-time-2covint.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
     save(modelout, file=paste0("results/", species, "_CJS_nojuv_model_output.rda"))

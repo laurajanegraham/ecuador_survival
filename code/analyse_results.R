@@ -36,7 +36,11 @@ jags2plot <- function(x) {
           names(phi.hab) <- names(phi.null)
         }
     }
-    phi.time <- data.frame(modelout$time$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2.real'),c('mean', '2.5%','97.5%')])
+    phi.time <- data.frame(modelout$time$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2'),c('mean', '2.5%','97.5%')])
+    phi.evi <- data.frame(modelout$evi$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2', 'beta'),c('mean', '2.5%','97.5%')])
+    phi.temp <- data.frame(modelout$temp$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2', 'beta'),c('mean', '2.5%','97.5%')])
+    phi.evi_temp <- data.frame(modelout$evi_temp$JAGSout$summary[c('mean.p', 'mean.phi', 'sigma2', 'beta1', 'beta2'),c('mean', '2.5%','97.5%')])
+    phi.evi_temp_int <- data.frame(modelout$evi_temp_int$JAGSoutput$summary[c('mean.p', 'mean.phi', 'sigma2', 'beta1', 'beta2', 'beta3'),c('mean', '2.5%','97.5%')])
     phi.null$model <- "Null"
     phi.hab$model <- "Habitat"
     phi.time$model <- "Time"
@@ -107,3 +111,4 @@ write.csv(fit, file="results/model_comparison.csv")
 write.csv(mod$dat[which(complete.cases(mod$dat)),], file="results/nojuv_raw_results.csv")
 write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
 
+# Models with time varying covariates
