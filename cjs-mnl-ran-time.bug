@@ -1,4 +1,3 @@
-
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
@@ -18,7 +17,7 @@ model {
     for (t in 1:(n.occasions-1)){
         marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
     }
-
+    
     # Define the cell probabilities of the m-array:
     # Main diagonal
     for (t in 1:(n.occasions-1)){
@@ -28,7 +27,7 @@ model {
         for (j in (t+1):(n.occasions-1)){
             pr[t,j] <- prod(phi[t:j])*prod(q[t:(j-1)])*p[j]
         } #j	
-    # Below main diagonal
+        # Below main diagonal
         for (j in 1:(t-1)){
             pr[t,j]<-0
         } #j
@@ -37,7 +36,7 @@ model {
     for (t in 1:(n.occasions-1)){
         pr[t,n.occasions] <- 1-sum(pr[t,1:(n.occasions-1)])
     } # t
-
+    
     # Assess model fit using Freeman-Tukey statistic
     # Compute fit statistics for observed data
     for (t in 1:(n.occasions-1)){
@@ -56,4 +55,3 @@ model {
     fit <- sum(E.org[,])
     fit.new <- sum(E.new[,])
 }
-    

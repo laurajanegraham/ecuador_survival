@@ -92,7 +92,7 @@ EncounterHistory <- function(data, session, band.number, group = NULL, sessions)
         
         # create the TSM encounter histories
         eh.first <- data.frame(t(apply(eh.full[3:ncol(eh.full)], 1, get.first)))
-        eh.other <- data.frame(t(apply(eh.full[3:ncol(eh.full)], 1, get.other)))
+        eh.other <- data.frame(group.id=eh.full$group.id, t(apply(eh.full[3:ncol(eh.full)], 1, get.other)))
         cap <- rowSums(eh.full[,3:ncol(eh.full)])
         not.cap <- eh.full[which(cap < 2),3:ncol(eh.full)]
         
@@ -106,8 +106,12 @@ EncounterHistory <- function(data, session, band.number, group = NULL, sessions)
         # final col is tot recaptures - need to adjust so it doesn't include
         # those recaptured in TSM2
         m.array.TSM1[,ncol(m.array.TSM1)] <- colSums(not.cap[,1:ncol(not.cap) - 1])
-        m.array.TSM2 <- fnMarray(eh.other)
+        m.array.TSM2 <- fnMarray(eh.other[,-1])
                 
+        # Need TSM2 grouped by habitat
+        eh.other.gp <- split(eh.other[,-1], f = eh.other$group.id)
+        m.array.TSM2.gp <- lapply(eh.other.gp, fnMarray)
+        
         # rename band.number column back to what it should be
         names(eh.mark)[1] <- band.number
         names(eh.full)[1] <- band.number
@@ -120,6 +124,6 @@ EncounterHistory <- function(data, session, band.number, group = NULL, sessions)
         }
         
         # TODO: add in a bit to do by group for habitat analysis
-        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp, m.array.TSM1 = m.array.TSM1, m.array.TSM2 = m.array.TSM2)
+        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp, m.array.TSM1 = m.array.TSM1, m.array.TSM2 = m.array.TSM2, m.array.TSM2.gp = m.array.TSM2.gp)
         return(eh)
 }

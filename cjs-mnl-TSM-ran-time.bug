@@ -2,18 +2,27 @@ model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
         phi.TSM1[t] <- mean.phitsm1
-        phi.TSM2[t] <- mean.phitsm2
+        logit(phi.TSM2[t]) <- mu + epsilon[t]
+        epsilon[t] ~ dnorm(0, tau)
         p[t] <- mean.p
     }
     mean.phitsm1 ~ dunif(0, 1)          # Prior for mean juv. survival
     mean.phitsm2 ~ dunif(0, 1)           # Prior for mean ad. survival
+    mu <- log(mean.phitsm2 / (1-mean.phitsm2))
+    sigma ~ dunif(0, 5)
+    tau <- pow(sigma, -2)
+    sigma2 <- pow(sigma, 2)
+    
+    # Temporal variance on real scale
+    sigma2.real <- sigma2 * pow(mean.phitsm2, 2) * pow((1-mean.phitsm2), 2)
     mean.p ~ dunif(0, 1)               # Prior for mean recapture
+    
     # Define the multinomial likelihood
     for (t in 1:(n.occasions-1)){
         marr.TSM1[t,1:n.occasions] ~ dmulti(pr.TSM1[t,], r.TSM1[t])
         marr.TSM2[t,1:n.occasions] ~ dmulti(pr.TSM2[t,], r.TSM2[t])
     }
-
+    
     # Define the cell probabilities of the m-arrays
     # Main diagonal
     for (t in 1:(n.occasions-1)){
@@ -31,11 +40,13 @@ model {
             pr.TSM2[t,j] <- 0
         } #j
     } #t
+    
     # Last column: probability of non-recapture
     for (t in 1:(n.occasions-1)){
         pr.TSM1[t,n.occasions] <- 1-sum(pr.TSM1[t,1:(n.occasions-1)])
         pr.TSM2[t,n.occasions] <- 1-sum(pr.TSM2[t,1:(n.occasions-1)])
     } #t
+    
     # Assess model fit using Freeman-Tukey statistic
     # Compute fit statistics for observed data
     for (t in 1:(n.occasions-1)){
@@ -46,6 +57,7 @@ model {
             E.org.TSM2[t,j] <- pow((pow(marr.TSM2[t,j], 0.5)-pow(expmarr.TSM2[t,j], 0.5)), 2)
         }
     }
+    
     # Generate replicate data and compute fit stats from them
     for (t in 1:(n.occasions-1)){
         marr.new.TSM1[t,1:n.occasions] ~ dmulti(pr.TSM1[t,], r.TSM1[t])
