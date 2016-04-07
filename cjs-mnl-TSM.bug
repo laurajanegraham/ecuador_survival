@@ -22,7 +22,7 @@ model {
         pr.TSM2[t,t] <- phi.TSM2[t]*p[t]
         # Above main diagonal
         for (j in (t+1):(n.occasions-1)){
-            pr.TSM1[t,j] <- phi.TSM1[t]*prod(phi.TSM2[t+1:j])*prod(q[t:(j-1)])*p[j]
+            pr.TSM1[t,j] <- phi.TSM1[t]*prod(phi.TSM2[(t+1):j])*prod(q[t:(j-1)])*p[j]
             pr.TSM2[t,j] <- prod(phi.TSM2[t:j])*prod(q[t:(j-1)])*p[j]
         } #j
         # Below main diagonal

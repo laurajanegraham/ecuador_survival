@@ -26,7 +26,7 @@ model {
         pr.2[t,t] <- phi.2[t]*p[t]
         # Above main diagonal
         for (j in (t+1):(n.occasions-1)){
-            pr.TSM1[t,j] <- prod(phi.TSM1[t:j])*prod(q[t:(j-1)])*p[j]
+            pr.TSM1[t,j] <- phi.TSM1[t]*(prod(phi.1[(t+1):j])+prod(phi.2[(t+1):j]))*prod(q[t:(j-1)])*p[j]
             pr.1[t,j] <- prod(phi.1[t:j])*prod(q[t:(j-1)])*p[j]
             pr.2[t,j] <- prod(phi.2[t:j])*prod(q[t:(j-1)])*p[j]
         } #j

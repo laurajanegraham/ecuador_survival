@@ -30,7 +30,7 @@ model {
         pr.s[t,t] <- phi.scrub[t]*p[t]
         # Above main diagonal
         for (j in (t+1):(n.occasions-1)){
-            pr.TSM1[t,j] <- prod(phi.TSM1[t:j])*prod(q[t:(j-1)])*p[j]
+		    pr.TSM1[t,j] <- phi.TSM1[t]*(prod(phi.intro[(t+1):j])+prod(phi.native[(t+1):j])+prod(phi.scrub[(t+1):j]))*prod(q[t:(j-1)])*p[j]
             pr.i[t,j] <- prod(phi.intro[t:j])*prod(q[t:(j-1)])*p[j]
             pr.n[t,j] <- prod(phi.native[t:j])*prod(q[t:(j-1)])*p[j]
             pr.s[t,j] <- prod(phi.scrub[t:j])*prod(q[t:(j-1)])*p[j]
