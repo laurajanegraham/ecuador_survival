@@ -104,7 +104,7 @@ model {
             E.new.s2[t,j] <- pow((pow(marr.new.s2[t,j], 0.5)-pow(expmarr.s2[t,j], 0.5)), 2)
         }
     }
-    fit <- sum(E.org.i1[,]) + sum(E.org.n1[,]) + sum(E.org.s1[,]) + sum(E.org.i2[,]) + sum(E.org.n2[,]) + sum(E.org.s2[,])
-    fit.new <-sum(E.new.i1[,]) + sum(E.new.n1[,]) + sum(E.new.s1[,]) + sum(E.new.i2[,]) + sum(E.new.n2[,]) + sum(E.new.s2[,])
+    #fit <- sum(E.org.i1[,]) + sum(E.org.n1[,]) + sum(E.org.s1[,]) + sum(E.org.i2[,]) + sum(E.org.n2[,]) + sum(E.org.s2[,])
+    #fit.new <-sum(E.new.i1[,]) + sum(E.new.n1[,]) + sum(E.new.s1[,]) + sum(E.new.i2[,]) + sum(E.new.n2[,]) + sum(E.new.s2[,])
 }
 

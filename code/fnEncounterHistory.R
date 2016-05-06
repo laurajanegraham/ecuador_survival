@@ -91,24 +91,36 @@ EncounterHistory <- function(data, session, band.number, group = NULL, sessions)
         
         
         # create the TSM encounter histories
-        eh.first <- data.frame(t(apply(eh.full[3:ncol(eh.full)], 1, get.first)))
+        eh.first <- data.frame(group.id=eh.full$group.id, t(apply(eh.full[3:ncol(eh.full)], 1, get.first)))
         eh.other <- data.frame(group.id=eh.full$group.id, t(apply(eh.full[3:ncol(eh.full)], 1, get.other)))
-        cap <- rowSums(eh.full[,3:ncol(eh.full)])
-        not.cap <- eh.full[which(cap < 2),3:ncol(eh.full)]
         
         # create m-array for input to WinBUGS 
         CH <- eh.full[,-1]
         m.array <- fnMarray(CH[,-1])
-        CH <- split(CH[,-1], f = CH$group.id)
-        m.array.gp <- lapply(CH, fnMarray)
-        m.array.TSM1 <- fnMarray(eh.first)
+        CH.gp <- split(CH[,-1], f = CH$group.id)
+        m.array.gp <- lapply(CH.gp, fnMarray)
+        m.array.TSM1 <- fnMarray(eh.first[,-1])
         m.array.TSM1[,ncol(m.array.TSM1)] <- 0 
-        # final col is tot recaptures - need to adjust so it doesn't include
-        # those recaptured in TSM2
+        
+        # final col is tot recaptures - need to adjust so it doesn't include those recaptured in TSM2
+        cap <- rowSums(eh.full[,3:ncol(eh.full)]) 
+        not.cap <- eh.full[which(cap < 2),3:ncol(eh.full)]
         m.array.TSM1[,ncol(m.array.TSM1)] <- colSums(not.cap[,1:ncol(not.cap) - 1])
+        
         m.array.TSM2 <- fnMarray(eh.other[,-1])
                 
-        # Need TSM2 grouped by habitat
+        # Need TSM grouped by habitat
+        eh.first.gp <- split(eh.first[,-1], f = eh.first$group.id)
+        m.array.TSM1.gp <- lapply(eh.first.gp, fnMarray)
+        not.cap.gp <- lapply(CH.gp, function(x) {
+            cap <- rowSums(x)
+            not.cap <- x[which(cap < 2),]
+        })
+        
+        for(i in 1:length(eh.first.gp)) {
+            m.array.TSM1.gp[[i]][,ncol(m.array.TSM1.gp[[i]])] <- colSums(not.cap.gp[[i]][,1:ncol(not.cap.gp[[i]]) - 1])    
+        }
+        
         eh.other.gp <- split(eh.other[,-1], f = eh.other$group.id)
         m.array.TSM2.gp <- lapply(eh.other.gp, fnMarray)
         
@@ -123,7 +135,6 @@ EncounterHistory <- function(data, session, band.number, group = NULL, sessions)
                 names(eh.full)[2] <- group
         }
         
-        # TODO: add in a bit to do by group for habitat analysis
-        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp, m.array.TSM1 = m.array.TSM1, m.array.TSM2 = m.array.TSM2, m.array.TSM2.gp = m.array.TSM2.gp)
+        eh <- list(eh.full = eh.full, eh.mark = eh.mark, m.array = m.array, m.array.gp = m.array.gp, m.array.TSM1 = m.array.TSM1, m.array.TSM2 = m.array.TSM2, m.array.TSM1.gp = m.array.TSM1.gp, m.array.TSM2.gp = m.array.TSM2.gp)
         return(eh)
 }
