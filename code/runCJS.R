@@ -215,6 +215,12 @@ for (species in species.list){
     }
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     
+    # MCMC options for time model - needs more iterations and burnin
+    ni <- 100000
+    nt <- 3
+    nb <- 20000
+    nc <- 3
+    
     # Time -----------------------------------------------------------------------------------------------------
     write(paste("Time model for ", species, sep=" "), logfile.name, append = TRUE)
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
