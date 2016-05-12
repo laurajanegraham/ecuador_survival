@@ -3,7 +3,6 @@ library(ggplot2)
 library(R2WinBUGS)
 library(dplyr)
 library(tidyr)
-library(taxize)
 library(mcmcplots)
 library(stringr)
 library(Hmisc)
@@ -16,7 +15,6 @@ sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')])
 
 getRes <- function(x) {
     load(x)
-    modelout <- modelout[which(names(modelout) != "habitat.tsm")]
     res <- lapply(names(modelout), function(x) {
         dat <- data.frame(modelout[[x]]$JAGSoutput$summary)
         dat$model <- x
@@ -70,8 +68,6 @@ getRes <- function(x) {
 
 getFit <- function(x) {
     load(x)
-    # this is just while habitat.tsm is broken - make sure to remove when fixed
-    modelout <- modelout[which(names(modelout) != "habitat.tsm")]
     species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
     fit <- lapply(modelout, function(x) {
         fit <- data.frame(fit=x$JAGSoutput$sims.list$fit, fit.new=x$JAGSoutput$sims.list$fit.new) %>%
@@ -82,6 +78,7 @@ getFit <- function(x) {
     rownames(fit) <- species
     # not all species could fit the habitat model (only present in one habitat) - will need to add another line for habitat.tsm once that is working.
     if(!"habitat" %in% colnames(fit)) fit$habitat <- NA
+    if(!"habitat.tsm" %in% colnames(fit)) fit$habitat.tsm <- NA
     return(fit)
 }
 
@@ -123,6 +120,7 @@ fit$bestmod <- apply(fit, 1, function(x) {
 
 fit$species <- rownames(fit)
 
+
 bestmodstats <- merge(fit, res, by.x=c("bestmod", "species"), by.y=c("model", "species")) %>%
     mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(lci,2)), "-", sprintf("%.2f", round(uci,2)), ")")) %>%
     select(species, param, val) %>%
@@ -133,7 +131,14 @@ write.csv(mod$dat[which(complete.cases(mod$dat)),], file="results/nojuv_raw_resu
 write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
 
 # Models with time varying covariates
+sigma <- filter(res.el, param=="sigma2") %>%
+    separate(model, c("model", "tsm"), sep="[.]", fill="right")
 
+if(bestmod == "tsm") sigma <- filter(sigma, !is.na(tsm))
+if(bestmod != "tsm") sigma <- filter(sigma, is.na(tsm))
 
+sigma.null <- filter(sigma, model=="time")
+sigma.other <- filter(sigma, model!="time")
 
-lapply(fit, function(x) length(x))
+sigma.other <- group_by(sigma.other, species) %>%
+    mutate(rsquare = (mean - sigma.null$mean) / sigma.null$mean)
