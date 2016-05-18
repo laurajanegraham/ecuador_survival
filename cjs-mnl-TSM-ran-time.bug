@@ -1,20 +1,20 @@
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-        phi.TSM1[t] <- mean.phitsm1
+        phi.TSM1[t] <- mean.phi1
         logit(phi.TSM2[t]) <- mu + epsilon[t]
         epsilon[t] ~ dnorm(0, tau)
         p[t] <- mean.p
     }
-    mean.phitsm1 ~ dunif(0, 1)          # Prior for mean juv. survival
-    mean.phitsm2 ~ dunif(0, 1)           # Prior for mean ad. survival
-    mu <- log(mean.phitsm2 / (1-mean.phitsm2))
+    mean.phi1 ~ dunif(0, 1)          # Prior for mean juv. survival
+    mean.phi2 ~ dunif(0, 1)           # Prior for mean ad. survival
+    mu <- log(mean.phi2 / (1-mean.phi2))
     sigma ~ dunif(0, 5)
     tau <- pow(sigma, -2)
     sigma2 <- pow(sigma, 2)
     
     # Temporal variance on real scale
-    sigma2.real <- sigma2 * pow(mean.phitsm2, 2) * pow((1-mean.phitsm2), 2)
+    sigma2.real <- sigma2 * pow(mean.phi2, 2) * pow((1-mean.phi2), 2)
     mean.p ~ dunif(0, 1)               # Prior for mean recapture
     
     # Define the multinomial likelihood

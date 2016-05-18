@@ -1,21 +1,21 @@
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-        phi.intro1[t] <- mean.phiintro1
-        phi.native1[t] <- mean.phinative1
-        phi.scrub1[t] <- mean.phiscrub1
-        phi.intro2[t] <- mean.phiintro2
-        phi.native2[t] <- mean.phinative2
-        phi.scrub2[t] <- mean.phiscrub2
+        phi.intro1[t] <- mean.phi1.intro
+        phi.native1[t] <- mean.phi1.native
+        phi.scrub1[t] <- mean.phi1.scrub
+        phi.intro2[t] <- mean.phi2.intro
+        phi.native2[t] <- mean.phi2.native
+        phi.scrub2[t] <- mean.phi2.scrub
         p[t] <- mean.p
     }
 
-    mean.phiintro1 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
-    mean.phinative1 ~ dunif(0, 1)           # Prior for mean survival in native habitat
-    mean.phiscrub1 ~ dunif(0, 1)           # Prior for mean survival in scrub
-    mean.phiintro2 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
-    mean.phinative2 ~ dunif(0, 1)           # Prior for mean survival in native habitat
-    mean.phiscrub2 ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.phi1.intro ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phi1.native ~ dunif(0, 1)           # Prior for mean survival in native habitat
+    mean.phi1.scrub ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.phi2.intro ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phi2.native ~ dunif(0, 1)           # Prior for mean survival in native habitat
+    mean.phi2.scrub ~ dunif(0, 1)           # Prior for mean survival in scrub
     mean.p ~ dunif(0, 1)               # Prior for mean recapture
     
     # Define the multinomial likelihood

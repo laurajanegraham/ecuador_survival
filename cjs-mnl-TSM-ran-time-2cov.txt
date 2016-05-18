@@ -1,21 +1,21 @@
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-        phi.TSM1[t] <- mean.phitsm1
-        logit(phi.TSM2[t]) <- mu + beta1*x1[t] + beta2*x2[t] + epsilon[t]
+        phi.TSM1[t] <- mean.phi1
+        logit(phi.TSM2[t]) <- mu + beta_evi*x1[t] + beta_temp*x2[t] + epsilon[t]
         epsilon[t] ~ dnorm(0, tau)
         p[t] <- mean.p
     }
-    mean.phitsm1 ~ dunif(0, 1)          # Prior for mean juv. survival
-    mean.phitsm2 ~ dunif(0, 1)           # Prior for mean ad. survival
-    mu <- log(mean.phitsm2 / (1-mean.phitsm2))
+    mean.phi1 ~ dunif(0, 1)          # Prior for mean juv. survival
+    mean.phi2 ~ dunif(0, 1)           # Prior for mean ad. survival
+    mu <- log(mean.phi2 / (1-mean.phi2))
     sigma ~ dunif(0, 5)
     tau <- pow(sigma, -2)
     sigma2 <- pow(sigma, 2)
-    beta1 ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
-    beta2 ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+    beta_evi ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+    beta_temp ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
     # Temporal variance on real scale
-    sigma2.real <- sigma2 * pow(mean.phitsm2, 2) * pow((1-mean.phitsm2), 2)
+    sigma2.real <- sigma2 * pow(mean.phi2, 2) * pow((1-mean.phi2), 2)
     mean.p ~ dunif(0, 1)               # Prior for mean recapture
     
     # Define the multinomial likelihood

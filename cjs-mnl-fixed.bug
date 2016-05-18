@@ -2,11 +2,11 @@
 model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-    phi[t] <- mean.phi          # Priors for survival
+    phi[t] <- mean.phi2          # Priors for survival
     p[t] <- mean.p          # Priors for recapture
     }
     
-    mean.phi ~ dunif(0, 1)
+    mean.phi2 ~ dunif(0, 1)
     mean.p ~ dunif(0, 1)
     
     # Define the multinomial likelihood

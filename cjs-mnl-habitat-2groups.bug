@@ -2,12 +2,12 @@
     model {
     # Priors and constraints
     for (t in 1:(n.occasions-1)){
-    phi.1[t] <- mean.phi1
-    phi.2[t] <- mean.phi2
+    phi.1[t] <- mean.phi2.hab1
+    phi.2[t] <- mean.phi2.hab2
     p[t] <- mean.p
     }
-    mean.phi1 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
-    mean.phi2 ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.phi2.hab1 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phi2.hab2 ~ dunif(0, 1)           # Prior for mean survival in scrub
     mean.p ~ dunif(0, 1)               # Prior for mean recapture
     # Define the multinomial likelihood
     for (t in 1:(n.occasions-1)){

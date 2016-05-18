@@ -5,13 +5,13 @@ model {
         epsilon[t] ~ dnorm(0, tau)
         p[t] <- mean.p
     }
-    mean.phi ~ dunif(0, 1)             # Prior for mean survival
-    mu <- log(mean.phi / (1-mean.phi)) # Logit transformation
+    mean.phi2 ~ dunif(0, 1)             # Prior for mean survival
+    mu <- log(mean.phi2 / (1-mean.phi2)) # Logit transformation
     sigma ~ dunif(0, 5)                # Prior for standard deviation
     tau <- pow(sigma, -2)
     sigma2 <- pow(sigma, 2)
     # Temporal variance on real scale
-    sigma2.real <- sigma2 * pow(mean.phi, 2) * pow((1-mean.phi), 2) 
+    sigma2.real <- sigma2 * pow(mean.phi2, 2) * pow((1-mean.phi2), 2) 
     mean.p ~ dunif(0, 1)                   # Prior for mean recapture
     # Define the multinomial likelihood
     for (t in 1:(n.occasions-1)){
