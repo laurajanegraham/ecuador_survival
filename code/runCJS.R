@@ -273,6 +273,7 @@ for (species in species.list){
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
     temp.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$temp, r=rowSums(marr))
+    timecov.parameters <- c("phi", "mean.p", "mean.phi", "beta", "sigma2", "sigma2.real", "fit", "fit.new")
     modelout[["temp"]] <- JAGSParallel(nc, data=temp.data, inits=time.inits, params=timecov.parameters, 
                                        model.file="cjs-mnl-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
@@ -282,6 +283,7 @@ for (species in species.list){
     write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
     strt <- Sys.time()       
     temp.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr), x = RS.dat$temp, r.TSM1=rowSums(marr.TSM1), r.TSM2=rowSums(marr.TSM2))
+    timecov.parameters <- c("mean.p", "mean.phitsm1", "mean.phitsm2", "beta", "sigma2", "sigma2.real", "fit", "fit.new")
     modelout[["temp.tsm"]] <- JAGSParallel(nc, data=temp.data, inits=time.inits, params=timecov.parameters, 
                                            model.file="cjs-mnl-TSM-ran-time-cov.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
