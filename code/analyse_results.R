@@ -53,6 +53,8 @@ write.csv(res[which(complete.cases(res)),], file="results/nojuv_raw_results.csv"
 
 fit <- lapply(files, getFit)
 fit <- do.call("rbind", fit)
+
+# we only want to know between null/habitat/time
 fit$bestmod <- apply(fit, 1, function(x) {
     x <- 0.5-x
     names(which.min(abs(x)))
@@ -64,9 +66,34 @@ write.csv(fit, file="results/model_comparison.csv")
 
 write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
 
+fit <- read.csv("results/model_comparison.csv")
+res.full <- read.csv("results/nojuv_raw_results.csv")
+
+# get only results for best fitting model for table 1
+res <- merge(res.full, fit, by.x=c("species", "model"), by.y=c("species", "bestmod"))
+
+# when I created the models I named them and the parameters badly. This lookup nonsense fixes that.
+param_lookup <- data.frame(orig_param=sort(unique(res$param)), 
+                           new_param=c("beta", "beta1", "beta2", "beta3","p", "phi2", "phi1", "phi2", "phi2.Introduced", 
+                                       "phi1.Introduced", "phi2.Introduced","phi2.Native", "phi1.Native", 
+                                       "phi2.Native", "phi2.Scrub", "phi1.Scrub", "phi2.Scrub",
+                                       "phi1", "phi2", "sigma2", "sigma2real"
+                                       ))
+
+res <- merge(res, param_lookup, by.x="param", by.y="orig_param")
+
+res$model <- ifelse(res$model=="TSM", "null.tsm", as.character(res$model))
+
+res_mod <- mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(X2.5.,2)), "-", sprintf("%.2f", round(X97.5.,2)), ")")) %>%
+    select(species, new_param, val, model) %>%
+    separate(new_param, c("param", "habitat"), sep="[.]", fill="right") %>%
+    spread(param, val) %>%
+    arrange(model, species, habitat)
+    
+write.csv(res_mod, file="terribleoutput.csv")
+
 # Models with time varying covariates
-sigma <- filter(res.el, param=="sigma2") %>%
-    separate(model, c("model", "tsm"), sep="[.]", fill="right")
+sigma <- filter(res, model %in% c("time", "time.tsm"), param=="sigma2") 
 
 if(bestmod == "tsm") sigma <- filter(sigma, !is.na(tsm))
 if(bestmod != "tsm") sigma <- filter(sigma, is.na(tsm))
