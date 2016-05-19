@@ -254,7 +254,7 @@ for (species in species.list){
     strt <- Sys.time()       
     evi.data <- list(marr = marr, n.occasions = ncol(marr), x = RS.dat$evi, r=rowSums(marr))
     evi.parameters <- c("mean.p", "mean.phi2", "beta_evi", "sigma2", "sigma2.real", "fit", "fit.new")
-    modelout[["evi"]] <- JAGSParallel(nc, data=evi.data, inits=time.inits, params=timecov.parameters, 
+    modelout[["evi"]] <- JAGSParallel(nc, data=evi.data, inits=time.inits, params=evi.parameters, 
                                       model.file="cjs-mnl-ran-time-evi.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
 
