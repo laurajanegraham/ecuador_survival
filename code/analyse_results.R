@@ -105,11 +105,21 @@ time_species <- filter(fit, bestmod %in% c("time", "time.tsm")) %>%
     select(species, bestmod) %>%
     separate(bestmod, c("time", "tsm"), sep="[.]", fill="right")
 
-sigmanull <- filter(res.full, model=="time", param=="sigma2") %>%
-    mutate(sigma2null=mean) %>%
-    select(species, tsm, sigma2null) 
-
 res.full <- separate(res.full, model, c("model", "tsm"), sep="[.]", fill="right")
+
+sigmanull <- filter(res.full, model=="time", param=="sigma2.real") %>%
+    mutate(sigma2null=mean,
+           sigma2min=X2.5.,
+           sigma2max=X97.5.) %>%
+    select(species, tsm, sigma2null, sigma2min, sigma2max) 
+
+    sigmaother <- filter(res.full, param=="sigma2.real", !model %in% c("null", "habitat", "time")) %>%
+        merge(time_species, by=c("species", "tsm")) %>%
+        merge(sigmanull) %>%
+        mutate(rsq=(sigma2null-mean)/sigma2null,
+               rsqmin=(sigma2min-X2.5.)/sigma2min,
+               rsqmax=(sigma2max-X97.5.)/sigma2max)
+
 
 rs.mods <- filter(res.full, !model %in% c("null", "habitat", "time")) %>%
     merge(time_species, by=c("species", "tsm")) %>%
@@ -118,7 +128,8 @@ rs.mods <- filter(res.full, !model %in% c("null", "habitat", "time")) %>%
     select(species, param, val, model, tsm) %>%
     spread(param, val) %>%
     merge(sigmanull) %>%
-    mutate(rsq=(sigma2null-as.numeric(substr(sigma2, 1, 4)))/sigma2null)
+    mutate(rsq=(sigma2null-as.numeric(substr(sigma2, 1, 4)))/sigma2null,
+           rsqmin=(sigma2min-as.numeric(substr(sigma2, 1, 4)))/sigma2null,)
     
 
 
