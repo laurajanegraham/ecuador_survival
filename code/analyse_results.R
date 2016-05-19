@@ -11,7 +11,18 @@ library(cowplot)
 source("code/fnCleanBandingDat.R")
 
 banding.dat.clean <- CleanBandingDat()
-sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')])
+sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')]) %>%
+    arrange(Specie.Name, habitat) %>%
+    group_by(Specie.Name) %>%
+    mutate(newhab=habitat,
+           habitat=paste0("hab",row_number()),
+           species=Specie.Name,
+           count=n()) %>%
+    mutate(habitat = ifelse(count==3 & newhab=="Introduced", "intro", habitat),
+           habitat = ifelse(count==3 & newhab=="Native", "native", habitat),
+           habitat = ifelse(count==3 & newhab=="Scrub", "scrub", habitat))
+
+sphab_all <- filter(sphab)
 
 getRes <- function(x) {
     load(x)
@@ -23,7 +34,7 @@ getRes <- function(x) {
     })
     
     res <- do.call("rbind", res)
-    res <- filter(res, !param %in% c("fit", "fit.new", paste0("phi[",1:29,"]")))
+    res <- filter(res, !param %in% c("fit", "fit.new", "sigma2.real", paste0("phi[",1:29,"]")))
     species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
     res$species <- species
     return(res)
@@ -55,7 +66,7 @@ fit <- lapply(files, getFit)
 fit <- do.call("rbind", fit)
 
 # we only want to know between null/habitat/time
-fit$bestmod <- apply(fit, 1, function(x) {
+fit$bestmod <- apply(fit[1:6], 1, function(x) {
     x <- 0.5-x
     names(which.min(abs(x)))
 })
@@ -72,28 +83,46 @@ res.full <- read.csv("results/nojuv_raw_results.csv")
 # get only results for best fitting model for table 1
 res <- merge(res.full, fit, by.x=c("species", "model"), by.y=c("species", "bestmod"))
 
-# when I created the models I named them and the parameters badly. This lookup nonsense fixes that.
-param_lookup <- data.frame(orig_param=sort(unique(res$param)), 
-                           new_param=c("beta", "beta1", "beta2", "beta3","p", "phi2", "phi1", "phi2", "phi2.Introduced", 
-                                       "phi1.Introduced", "phi2.Introduced","phi2.Native", "phi1.Native", 
-                                       "phi2.Native", "phi2.Scrub", "phi1.Scrub", "phi2.Scrub",
-                                       "phi1", "phi2", "sigma2", "sigma2real"
-                                       ))
-
-res <- merge(res, param_lookup, by.x="param", by.y="orig_param")
-
+# rename the null TSM model to make column separation easier
 res$model <- ifelse(res$model=="TSM", "null.tsm", as.character(res$model))
 
-res_mod <- mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(X2.5.,2)), "-", sprintf("%.2f", round(X97.5.,2)), ")")) %>%
-    select(species, new_param, val, model) %>%
-    separate(new_param, c("param", "habitat"), sep="[.]", fill="right") %>%
+# create results table so that it requires minimal adjustment in excel
+res_mod <- mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(X2.5.,2)), "-", sprintf("%.2f", round(X97.5.,2)), ")"),
+                  param=gsub("mean.", "", param)) %>%
+    select(species, param, val, model) %>%
+    separate(param, c("param", "habitat"), sep="[.]", fill="right") %>%
     spread(param, val) %>%
-    arrange(model, species, habitat)
-    
+    arrange(model, species, habitat) %>%
+    merge(sphab, all.x=TRUE) %>%
+    mutate(habitat = newhab) %>%
+    arrange(model, species, habitat) %>%
+    select(model, species, p, habitat, phi1, phi2, sigma2)
+
 write.csv(res_mod, file="terribleoutput.csv")
 
 # Models with time varying covariates
-sigma <- filter(res, model %in% c("time", "time.tsm"), param=="sigma2") 
+time_species <- filter(fit, bestmod %in% c("time", "time.tsm")) %>%
+    select(species, bestmod) %>%
+    separate(bestmod, c("time", "tsm"), sep="[.]", fill="right")
+
+sigmanull <- filter(res.full, model=="time", param=="sigma2") %>%
+    mutate(sigma2null=mean) %>%
+    select(species, tsm, sigma2null) 
+
+res.full <- separate(res.full, model, c("model", "tsm"), sep="[.]", fill="right")
+
+rs.mods <- filter(res.full, !model %in% c("null", "habitat", "time")) %>%
+    merge(time_species, by=c("species", "tsm")) %>%
+    mutate(val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(X2.5.,2)), "-", sprintf("%.2f", round(X97.5.,2)), ")"),
+           param=gsub("mean.", "", param)) %>%
+    select(species, param, val, model, tsm) %>%
+    spread(param, val) %>%
+    merge(sigmanull) %>%
+    mutate(rsq=(sigmanull-sigma2)/sigmanull)
+    
+
+
+
 
 if(bestmod == "tsm") sigma <- filter(sigma, !is.na(tsm))
 if(bestmod != "tsm") sigma <- filter(sigma, is.na(tsm))
