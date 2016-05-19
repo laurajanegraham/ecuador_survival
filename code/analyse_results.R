@@ -118,7 +118,7 @@ rs.mods <- filter(res.full, !model %in% c("null", "habitat", "time")) %>%
     select(species, param, val, model, tsm) %>%
     spread(param, val) %>%
     merge(sigmanull) %>%
-    mutate(rsq=(sigmanull-sigma2)/sigmanull)
+    mutate(rsq=(sigma2null-as.numeric(substr(sigma2, 1, 4)))/sigma2null)
     
 
 
