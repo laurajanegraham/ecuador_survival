@@ -10,7 +10,7 @@ library(cowplot)
 
 source("code/fnCleanBandingDat.R")
 
-banding.dat.clean <- CleanBandingDat()
+banding.dat.clean <- CleanBandingDat(inc.juvenile = FALSE)
 sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')]) %>%
     arrange(Specie.Name, habitat) %>%
     group_by(Specie.Name) %>%
@@ -21,8 +21,6 @@ sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')]) %>%
     mutate(habitat = ifelse(count==3 & newhab=="Introduced", "intro", habitat),
            habitat = ifelse(count==3 & newhab=="Native", "native", habitat),
            habitat = ifelse(count==3 & newhab=="Scrub", "scrub", habitat))
-
-sphab_all <- filter(sphab)
 
 getRes <- function(x) {
     load(x)
@@ -78,6 +76,7 @@ res <- merge(res.full, fit, by.x=c("species", "model"), by.y=c("species", "bestm
 
 # rename the null TSM model to make column separation easier
 res$model <- ifelse(res$model=="TSM", "null.tsm", as.character(res$model))
+res <- separate(res, model, c("model", "tsm"), sep="[.]", fill="right")
 
 # create results table so that it requires minimal adjustment in excel
 res_mod <- mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(X2.5.,2)), "-", sprintf("%.2f", round(X97.5.,2)), ")"),
@@ -97,20 +96,21 @@ write.csv(fit, file="results/model_comparison.csv")
 
 write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
 
-# Models with time varying covariates
+# Models with time varying covariates - this is rubbish because nearly all slope CIs contain 0. 
+res.full <- read.csv("results/nojuv_raw_results.csv")
+fit <- read.csv("results/model_comparison.csv")
+
 time_species <- filter(fit, bestmod %in% c("time", "time.tsm")) %>%
     select(species, bestmod) %>%
     separate(bestmod, c("time", "tsm"), sep="[.]", fill="right")
 
-res.full <- separate(res.full, model, c("model", "tsm"), sep="[.]", fill="right")
-
-sigmanull <- filter(res.full, model=="time", param=="sigma2.real") %>%
+sigmanull <- filter(res.full, model=="time", param=="sigma2") %>%
     mutate(sigma2null=mean,
            sigma2min=X2.5.,
            sigma2max=X97.5.) %>%
     select(species, tsm, sigma2null, sigma2min, sigma2max) 
 
-    sigmaother <- filter(res.full, param=="sigma2.real", !model %in% c("null", "habitat", "time")) %>%
+    sigmaother <- filter(res.full, param=="sigma2", !model %in% c("null", "habitat", "time")) %>%
         merge(time_species, by=c("species", "tsm")) %>%
         merge(sigmanull) %>%
         mutate(rsq=(sigma2null-mean)/sigma2null,
@@ -124,9 +124,7 @@ rs.mods <- filter(res.full, !model %in% c("null", "habitat", "time")) %>%
            param=gsub("mean.", "", param)) %>%
     select(species, param, val, model, tsm) %>%
     spread(param, val) %>%
-    merge(sigmanull) %>%
-    mutate(rsq=(sigma2null-as.numeric(substr(sigma2, 1, 4)))/sigma2null,
-           rsqmin=(sigma2min-as.numeric(substr(sigma2, 1, 4)))/sigma2null,)
+    merge(sigmaother)
     
 
 
