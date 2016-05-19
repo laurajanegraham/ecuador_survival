@@ -58,9 +58,9 @@ getFit <- function(x) {
 
 files <- list.files("results", pattern="CJS_nojuv", full.names = TRUE)
 
-res <- lapply(files, getRes)
-res <- do.call("rbind", res)
-write.csv(res[which(complete.cases(res)),], file="results/nojuv_raw_results.csv")
+res.full <- lapply(files, getRes)
+res.full <- do.call("rbind", res.full)
+write.csv(res.full[which(complete.cases(res.full)),], file="results/nojuv_raw_results.csv")
 
 fit <- lapply(files, getFit)
 fit <- do.call("rbind", fit)
@@ -72,13 +72,6 @@ fit$bestmod <- apply(fit[1:6], 1, function(x) {
 })
 
 fit$species <- rownames(fit)
-
-write.csv(fit, file="results/model_comparison.csv")
-
-write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
-
-fit <- read.csv("results/model_comparison.csv")
-res.full <- read.csv("results/nojuv_raw_results.csv")
 
 # get only results for best fitting model for table 1
 res <- merge(res.full, fit, by.x=c("species", "model"), by.y=c("species", "bestmod"))
@@ -98,7 +91,11 @@ res_mod <- mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf(
     arrange(model, species, habitat) %>%
     select(model, species, p, habitat, phi1, phi2, sigma2)
 
-write.csv(res_mod, file="terribleoutput.csv")
+write.csv(res_mod, file="results/model_results.csv")
+
+write.csv(fit, file="results/model_comparison.csv")
+
+write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
 
 # Models with time varying covariates
 time_species <- filter(fit, bestmod %in% c("time", "time.tsm")) %>%
