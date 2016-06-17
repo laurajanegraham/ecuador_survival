@@ -94,7 +94,7 @@ write.csv(res_mod, file="results/model_results.csv")
 
 write.csv(fit, file="results/model_comparison.csv")
 
-write.csv(usable_dat, file="results/nojuv_recapture_summaries.csv")
+write.csv(dat_recaps, file="results/nojuv_recapture_summaries.csv")
 
 # Models with time varying covariates - this is rubbish because nearly all slope CIs contain 0. 
 res.full <- read.csv("results/nojuv_raw_results.csv")
