@@ -27,9 +27,9 @@ model {
         q.intro[t] <- 1-p.intro[t]            # Probability of non-recapture
         q.native[t] <- 1-p.native[t]
         q.scrub[t] <- 1-p.scrub[t]
-        pr.i[t,t] <- phi.intro[t]*p[t]
-        pr.n[t,t] <- phi.native[t]*p[t]
-        pr.s[t,t] <- phi.scrub[t]*p[t]
+        pr.i[t,t] <- phi.intro[t]*p.intro[t]
+        pr.n[t,t] <- phi.native[t]*p.native[t]
+        pr.s[t,t] <- phi.scrub[t]*p.scrub[t]
         # Above main diagonal
         for (j in (t+1):(n.occasions-1)){
             pr.i[t,j] <- prod(phi.intro[t:j])*prod(q.intro[t:(j-1)])*p.intro[j]

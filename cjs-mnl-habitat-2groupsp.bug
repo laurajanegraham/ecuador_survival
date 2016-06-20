@@ -22,8 +22,8 @@
     for (t in 1:(n.occasions-1)){
     q1[t] <- 1-p1[t]            # Probability of non-recapture
     q2[t] <- 1-p2[t]
-    pr.1[t,t] <- phi.1[t]*p[t]
-    pr.2[t,t] <- phi.2[t]*p[t]
+    pr.1[t,t] <- phi.1[t]*p1[t]
+    pr.2[t,t] <- phi.2[t]*p2[t]
     # Above main diagonal
     for (j in (t+1):(n.occasions-1)){
     pr.1[t,j] <- prod(phi.1[t:j])*prod(q1[t:(j-1)])*p1[j]
