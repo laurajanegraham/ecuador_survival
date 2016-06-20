@@ -5,16 +5,16 @@ model {
         phi.native1[t] <- mean.phi1.hab2
         phi.intro2[t] <- mean.phi2.hab1
         phi.native2[t] <- mean.phi2.hab2
-        p.intro[t] <- mean.p.intro
-        p.native[t] <- mean.p.native
+        p.intro[t] <- mean.p.hab1
+        p.native[t] <- mean.p.hab2
     }
 
     mean.phi1.hab1 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
     mean.phi1.hab2 ~ dunif(0, 1)           # Prior for mean survival in native habitat
     mean.phi2.hab1 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
     mean.phi2.hab2 ~ dunif(0, 1)           # Prior for mean survival in native habitat
-    mean.p.intro ~ dunif(0, 1)               # Prior for mean recapture
-    mean.p.native ~ dunif(0, 1)
+    mean.p.hab1 ~ dunif(0, 1)               # Prior for mean recapture
+    mean.p.hab2 ~ dunif(0, 1)
     # Define the multinomial likelihood
     for (t in 1:(n.occasions-1)){
         marr.i1[t,1:n.occasions] ~ dmulti(pr.i1[t,], r.i1[t])
