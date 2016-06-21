@@ -147,7 +147,7 @@ for (species in species.list){
                                          mean.phi2.native = runif(1, 0, 1),
                                          mean.phi2.scrub = runif(1, 0, 1),
                                          mean.p.intro = runif(1, 0, 1),
-                                         mean.p.scrub = runif(1, 0, 1),
+                                         mean.p.native = runif(1, 0, 1),
                                          mean.p.scrub = runif(1, 0, 1))}
         habitat.parameters <- c("mean.p.intro", "mean.p.native", "mean.p.scrub", "mean.phi2.native", "mean.phi2.scrub", "mean.phi2.intro", "fit", "fit.new")
         modelout[["habitatp"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
@@ -342,4 +342,4 @@ for (species in species.list){
 }
 
 # runs the code to check model convergence (output is plots of model convergence and the max rhat value)
-source("code/check_convergence.R")
+#source("code/check_convergence.R")

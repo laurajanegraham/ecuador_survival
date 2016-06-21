@@ -36,7 +36,7 @@ model {
     for (t in 1:(n.occasions-1)){
         q.intro[t] <- 1-p.intro[t]            # Probability of non-recapture
         q.native[t] <- 1-p.native[t]
-        q.scrub[t] <- 1-p.scurb[t]
+        q.scrub[t] <- 1-p.scrub[t]
         pr.i1[t,t] <- phi.intro1[t]*p.intro[t]
         pr.n1[t,t] <- phi.native1[t]*p.native[t]
         pr.s1[t,t] <- phi.scrub1[t]*p.scrub[t]

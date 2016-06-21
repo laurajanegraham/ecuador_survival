@@ -32,7 +32,7 @@ getRes <- function(x) {
     })
     
     res <- do.call("rbind", res)
-    res <- filter(res, !param %in% c("fit", "fit.new", "sigma2.real", paste0("phi[",1:29,"]")))
+    res <- filter(res, !param %in% c("fit", "fit.new", "sigma2.real", c(paste0("phi[",1:29,"]"), paste0("phi.TSM1[",1:29,"]"), paste0("phi.TSM2[",1:29,"]"))))
     species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
     res$species <- species
     return(res)
@@ -51,6 +51,8 @@ getFit <- function(x) {
     # not all species could fit the habitat model (only present in one habitat) 
     if(!"habitat" %in% colnames(fit)) fit$habitat <- NA
     if(!"habitat.tsm" %in% colnames(fit)) fit$habitat.tsm <- NA
+    if(!"habitatp" %in% colnames(fit)) fit$habitatp <- NA
+    if(!"habitatp.tsm" %in% colnames(fit)) fit$habitatp.tsm <- NA
     return(fit)
 }
 
@@ -64,7 +66,7 @@ fit <- lapply(files, getFit)
 fit <- do.call("rbind", fit)
 
 # we only want to know between null/habitat/time
-fit$bestmod <- apply(fit[1:6], 1, function(x) {
+fit$bestmod <- apply(fit[,c("null", "TSM", "habitat", "habitat.tsm", "time", "time.tsm")], 1, function(x) {
     x <- 0.5-x
     names(which.min(abs(x)))
 })
@@ -138,3 +140,32 @@ sigma.other <- filter(sigma, model!="time")
 
 sigma.other <- group_by(sigma.other, species) %>%
     mutate(rsquare = (mean - sigma.null$mean) / sigma.null$mean)
+
+# Plot of through time estimates of survival 
+time.species <- filter(fit, bestmod %in% c("time", "time.tsm")) %>%
+  select(species, bestmod)
+
+get.time.res <- function(time.species, x) { 
+  species <- time.species[x, "species"]
+  bestmod <- time.species[x, "bestmod"]
+  file <- list.files("results", pattern = species, full.names = TRUE)
+  load(file)
+  mod <- modelout[[bestmod]]
+  dat <- data.frame(mod$JAGSoutput$summary)
+  dat$param <- rownames(dat)
+  dat <- filter(dat, param %in% c(paste0("phi[",1:29,"]"), paste0("phi.TSM2[",1:29,"]")))
+  dat$session <- sort(unique(banding.dat.clean$session_new))[-1]
+  dat$species <- species
+  return(dat)
+}
+
+time.res <- lapply(rownames(time.species), function(x) get.time.res(time.species, x))
+time.res <- do.call("rbind", time.res)
+
+ggplot(time.res, aes(x = session, y = mean)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = X2.5., ymax = X97.5.), width=.1, position = position_dodge(0.1)) + 
+  geom_line(position = position_dodge(0.1)) +
+  facet_wrap(~species, ncol = 2) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
