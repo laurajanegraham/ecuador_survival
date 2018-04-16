@@ -1,4 +1,8 @@
-CleanBandingDat <- function(inc.juvenile=TRUE) {
+CleanBandingDat <- function(f, inc.juvenile=TRUE) {
+  
+  # load packages
+  library(data.table)
+  library(tidyverse)
   
   # read in the table from full_data.mdb and write out to banding_sheet.csv - this
   # gets rid of column attribute issues
@@ -14,13 +18,13 @@ CleanBandingDat <- function(inc.juvenile=TRUE) {
 #   write.csv(banding.dat, file="data/banding_sheet.csv")
   
   # re-read in data
-  banding.dat <- read.csv("data/banding_sheet.csv", stringsAsFactors = FALSE)
-  
+  banding.dat <- fread(f)
+  names(banding.dat) <- gsub(" ", ".", names(banding.dat))
   if(!inc.juvenile) banding.dat <- filter(banding.dat, Age!="Y")
   # remove records with no species, session or band (at the moment this
   # also limits the temporal extent to that used in the chapter by Boris)
-  banding.dat.clean <- filter(banding.dat, Band.Number != 99999, 
-                              !(Specie.Name %in% c("", "U", "99999"))) %>%
+  banding.dat.clean <- filter(banding.dat, !(Band.Number %in% c("99999", "9999", "", "SIN ANILLO")), 
+                              !(Specie.Name %in% c("", "U", "99999", "9"))) %>%
     # also add on a habitat column based on location
     mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub",
                             ifelse(Location == "MASE", "Native", "Introduced")))

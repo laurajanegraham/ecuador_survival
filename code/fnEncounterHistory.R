@@ -65,7 +65,7 @@ EncounterHistory <- function(data, session, band.number, group = NULL, sessions)
         eh.full[is.na(eh.full)] <- 0
         
         # some species are not sampled at all sessions - this fixes it
-        no.rec.sessions <- sessions[which(!sessions %in% colnames(eh.full))]
+        no.rec.sessions <- sessions[which(!(sessions %in% colnames(eh.full)))]
         zeroes <- matrix(data = 0, nrow = nrow(eh.full), ncol = length(no.rec.sessions))
         colnames(zeroes) <- no.rec.sessions
         eh.full <- cbind(eh.full, zeroes)

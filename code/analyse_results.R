@@ -1,6 +1,7 @@
 # load packages
 library(ggplot2)
 library(R2WinBUGS)
+library(plyr)
 library(dplyr)
 library(tidyr)
 library(mcmcplots)
@@ -8,15 +9,35 @@ library(stringr)
 library(Hmisc)
 library(cowplot)
 
+
 source("code/fnCleanBandingDat.R")
 
-banding.dat.clean <- CleanBandingDat(inc.juvenile = FALSE)
-sphab <- unique(banding.dat.clean[,c('Specie.Name', 'habitat')]) %>%
-    arrange(Specie.Name, habitat) %>%
-    group_by(Specie.Name) %>%
+# we have done two levels of analysis: one at the species level, and one at the forest specialisation level
+#analysis_level <- "specialisms"
+analysis_level <- "species"
+
+data_input <- c("data/banding_sheet.csv", "data/2016_data.csv")
+banding.dat.clean <- ldply(data_input, function(f) CleanBandingDat(f, inc.juvenile = FALSE))
+guilds <- read.csv("data/forest_specialization.csv")
+guilds$Specie.Name <- toupper(guilds$Species)
+
+
+if(analysis_level == "specialisms") { 
+  banding.dat.clean <- merge(banding.dat.clean, guilds)
+  banding.dat.clean$tax_level <- banding.dat.clean$Forest.specialization
+} else if(analysis_level == "species") {
+  banding.dat.clean <- merge(banding.dat.clean, guilds, all.x = TRUE)
+  banding.dat.clean$tax_level <- banding.dat.clean$Specie.Name
+} else {
+  stop("Make sure an analysis level is included at the top of the script!")
+}
+
+sphab <- unique(banding.dat.clean[,c('tax_level', 'habitat')]) %>%
+    arrange(tax_level, habitat) %>%
+    group_by(tax_level) %>%
     mutate(newhab=habitat,
-           habitat=paste0("hab",row_number()),
-           species=Specie.Name,
+           habitat=paste0("hab",1:n()),
+           tax_identity=tax_level,
            count=n()) %>%
     mutate(habitat = ifelse(count==3 & newhab=="Introduced", "intro", habitat),
            habitat = ifelse(count==3 & newhab=="Native", "native", habitat),
@@ -33,70 +54,93 @@ getRes <- function(x) {
     
     res <- do.call("rbind", res)
     res <- filter(res, !param %in% c("fit", "fit.new", "sigma2.real", c(paste0("phi[",1:29,"]"), paste0("phi.TSM1[",1:29,"]"), paste0("phi.TSM2[",1:29,"]"))))
-    species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
-    res$species <- species
+    tax_identity <- gsub("_", " ", str_match(x,pattern="/(\\w+.\\w+)_CJS")[,2])
+    res$tax_identity <- tax_identity
     return(res)
 }
 
 getFit <- function(x) {
-    load(x)
-    species <- gsub("_", " ", str_match(x,pattern="results/(\\w+.\\w+)_CJS")[,2])
-    fit <- lapply(modelout, function(x) {
-        fit <- data.frame(fit=x$JAGSoutput$sims.list$fit, fit.new=x$JAGSoutput$sims.list$fit.new) %>%
-            summarise(p.val = round(mean(fit.new > fit), 2))
-        })
-    fit <- do.call("rbind", fit)
-    fit <- data.frame(t(fit))
-    rownames(fit) <- species
-    # not all species could fit the habitat model (only present in one habitat) 
-    if(!"habitat" %in% colnames(fit)) fit$habitat <- NA
-    if(!"habitat.tsm" %in% colnames(fit)) fit$habitat.tsm <- NA
-    if(!"habitatp" %in% colnames(fit)) fit$habitatp <- NA
-    if(!"habitatp.tsm" %in% colnames(fit)) fit$habitatp.tsm <- NA
-    return(fit)
+  load(x)
+  tax_identity <- gsub("_", " ", str_match(x,pattern="/(\\w+.\\w+)_CJS")[,2])
+  fit <- lapply(modelout, function(x) {
+    fit <- data.frame(fit=x$JAGSoutput$sims.list$fit, fit.new=x$JAGSoutput$sims.list$fit.new) %>%
+      summarise(p.val = round(mean(fit.new > fit), 2))
+  })
+  fit <- do.call("rbind", fit)
+  fit <- data.frame(t(fit))
+  rownames(fit) <- tax_identity
+  # not all species could fit the habitat model (only present in one habitat) 
+  if(!"habitat" %in% colnames(fit)) fit$habitat <- NA
+  if(!"habitat.tsm" %in% colnames(fit)) fit$habitat.tsm <- NA
+  return(fit)
 }
 
-files <- list.files("results", pattern="CJS_nojuv", full.names = TRUE)
+
+files <- list.files(paste0("results/", analysis_level), pattern="CJS_nojuv", full.names = TRUE)  
 
 res.full <- lapply(files, getRes)
-res.full <- do.call("rbind", res.full)
-write.csv(res.full[which(complete.cases(res.full)),], file="results/nojuv_raw_results.csv")
+res.full <- do.call("rbind", res.full) %>% 
+  mutate(param=gsub("mean.", "", param)) %>%
+  separate(param, c("param", "habitat"), sep="[.]", fill="right") %>%
+  left_join(sphab) %>%
+  select(-tax_level, -habitat, -count) %>%
+  write_csv(paste0("results/", analysis_level, "/nojuv_raw_results.csv"))
 
 fit <- lapply(files, getFit)
 fit <- do.call("rbind", fit)
 
-# we only want to know between null/habitat/time
-fit$bestmod <- apply(fit[,c("null", "TSM", "habitat", "habitat.tsm", "time", "time.tsm")], 1, function(x) {
+# we only want to know between null/habitat
+fit$bestmod <- apply(fit[,c("null", "null.tsm", "habitat", "habitat.tsm")], 1, function(x) {
     x <- 0.5-x
     names(which.min(abs(x)))
 })
 
-fit$species <- rownames(fit)
+fit$tax_identity <- rownames(fit)
 
 # get only results for best fitting model for table 1
-res <- merge(res.full, fit, by.x=c("species", "model"), by.y=c("species", "bestmod"))
+res <- merge(res.full, fit, by.x=c("tax_identity", "model"), by.y=c("tax_identity", "bestmod"))
 
 # rename the null TSM model to make column separation easier
-res$model <- ifelse(res$model=="TSM", "null.tsm", as.character(res$model))
 res <- separate(res, model, c("model", "tsm"), sep="[.]", fill="right")
 
 # create results table so that it requires minimal adjustment in excel
 res_mod <- mutate(res, val=paste0(sprintf("%.2f", round(mean,2)), " (", sprintf("%.2f", round(X2.5.,2)), "-", sprintf("%.2f", round(X97.5.,2)), ")"),
                   param=gsub("mean.", "", param)) %>%
-    select(species, param, val, model) %>%
+    select(tax_identity, param, val, model) %>%
     separate(param, c("param", "habitat"), sep="[.]", fill="right") %>%
     spread(param, val) %>%
-    arrange(model, species, habitat) %>%
+    arrange(model, tax_identity, habitat) %>%
     merge(sphab, all.x=TRUE) %>%
     mutate(habitat = newhab) %>%
-    arrange(model, species, habitat) %>%
-    select(model, species, p, habitat, phi1, phi2, sigma2)
+    arrange(model, tax_identity, habitat)
 
-write.csv(res_mod, file="results/model_results.csv")
+# create the recaps summaries
+dat_summary <- group_by(banding.dat.clean, tax_level, Band.Number) %>%
+  summarise(recap=n()-1)
 
-write.csv(fit, file="results/model_comparison.csv")
+dat_recaps <- mutate(dat_summary, 
+                     N=1) %>%
+  spread(recap, N) %>%
+  select(-Band.Number) %>%
+  group_by(tax_level) %>%
+  summarise_all(funs(sum(., na.rm=TRUE))) %>%
+  mutate(nind=rowSums(.[-1]))
 
-write.csv(dat_recaps, file="results/nojuv_recapture_summaries.csv")
+dat_nind <- group_by(dat_summary, tax_level) %>%
+  summarise(nind=n())
+
+dat_recaps$recaps <- rowSums(dat_recaps[,-c(1, 2, ncol(dat_recaps))])
+
+# output results
+write_csv(res_mod, paste0("results/", analysis_level, "/model_results.csv"))
+
+write_csv(fit, paste0("results/", analysis_level, "/model_comparison.csv"))
+
+write_csv(dat_recaps, paste0("results/", analysis_level, "/nojuv_recapture_summaries.csv"))
+
+#### 
+# BELOW HERE IS RUBBISH
+####
 
 # Models with time varying covariates - this is rubbish because nearly all slope CIs contain 0. 
 res.full <- read.csv("results/nojuv_raw_results.csv")

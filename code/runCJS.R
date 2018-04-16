@@ -15,6 +15,9 @@
 #       e) evi, temperature and the intersection as covariates
 
 #load packages
+library("plyr")
+
+
 library("R2jags")
 library("R2WinBUGS")
 library("mcmcplots")
@@ -34,21 +37,25 @@ source("code/fnKnownStateInits.R")
 source("code/JAGSParallel.R")
 
 # change this depending on whether data should be grouped or for individual species
-grouped = FALSE
+grouped = TRUE
 
 # Load and format banding and remote sensing data ------------------------------
-banding.dat.clean <- CleanBandingDat(inc.juvenile=FALSE)
+data_input <- c("data/banding_sheet.csv", "data/2016_data.csv")
+
+banding.dat.clean <- ldply(data_input, function(f) CleanBandingDat(f, inc.juvenile = FALSE))
 sessions <- unique(banding.dat.clean$session_new)
-#bird_groups <- read.csv("data/bird_groups_AN.csv")
-#banding.dat.clean <- merge(banding.dat.clean, bird_groups, by.x="Specie.Name", by.y="SP.")
-RS.dat <- CleanRSData(12)
+guilds <- read.csv("data/forest_specialization.csv")
+guilds$Specie.Name <- toupper(guilds$Species)
+banding.dat.clean <- merge(banding.dat.clean, guilds)
+# NB we lose some species here - need to point out to boris which species are missing from the analysis
+
 # this is the log file that will record how long each model run took. 
 logfile.name <- paste0("logs/winbugs_log_", Sys.Date(), ".txt")
 file.create(logfile.name)
 
 # Here we create a count of recaptures (how many individuals captured once, twice ... n times)
 if(grouped) { 
-  banding.dat.clean$tax_level <- banding.dat.clean$Group
+  banding.dat.clean$tax_level <- banding.dat.clean$Forest.specialization
 } else {
   banding.dat.clean$tax_level <- banding.dat.clean$Specie.Name
 }
@@ -61,7 +68,7 @@ dat_recaps <- mutate(dat_summary,
     spread(recap, N) %>%
     select(-Band.Number) %>%
     group_by(tax_level) %>%
-    summarise_each(funs(sum(., na.rm=TRUE))) %>%
+    summarise_all(funs(sum(., na.rm=TRUE))) %>%
     mutate(nind=rowSums(.[-1]))
 
 dat_nind <- group_by(dat_summary, tax_level) %>%
@@ -78,10 +85,10 @@ species.list <- usable_dat$tax_level
 
 for (species in species.list){
     # create a list to put results into
-    #modelout <- list()
+    modelout <- list()
     
     # load existing results to update with rerun model
-    load(paste0("results/", species, "_CJS_nojuv_model_output.rda"))
+    #load(paste0("results/", species, "_CJS_nojuv_model_output.rda"))
     
     # get species data ---------------------------------------------------------
     sp_dat <- filter(banding.dat.clean, tax_level == species) %>%
@@ -106,31 +113,31 @@ for (species in species.list){
     nb <- 2000
     nc <- 3
     
-    # write(paste("Null model for ", species, sep=" "), logfile.name, append = TRUE)
-    # write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    # strt <- Sys.time()       
-    # constant.data <- list(marr = marr, n.occasions = ncol(marr), r = rowSums(marr))
-    # constant.inits <- function(){list(mean.phi2 = runif(1, 0, 1), 
-    #                                   mean.p = runif(1, 0, 1))}  
-    # constant.parameters <- c("mean.p", "mean.phi2", "fit", "fit.new")
-    # modelout[["null"]] <- JAGSParallel(nc, data=constant.data, inits=constant.inits, params=constant.parameters, 
-    #                                    model.file="cjs-mnl-fixed.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
-    # write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-    #  
-    # # TSM --------------------------------------------------------------------------------------------------
-    # write(paste("Null TSM model for ", species, sep=" "), logfile.name, append = TRUE)
-    # write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    # strt <- Sys.time()
-    # tsm.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr.TSM1),
-    #                  r.TSM1 = rowSums(marr.TSM1), r.TSM2 = rowSums(marr.TSM2))
-    # tsm.inits <- function(){list(mean.phi1 = runif(1, 0, 1),
-    #                              mean.phi2 = runif(1, 0, 1),
-    #                              mean.p = runif(1, 0, 1))}
-    # tsm.parameters <- c("mean.p", "mean.phi1", "mean.phi2","fit", "fit.new")
-    # modelout[["TSM"]] <- JAGSParallel(nc, data=tsm.data, inits=tsm.inits, params=tsm.parameters,
-    #                                   model.file="cjs-mnl-TSM.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
-    # write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-    # 
+    write(paste("Null model for ", species, sep=" "), logfile.name, append = TRUE)
+    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    strt <- Sys.time()
+    constant.data <- list(marr = marr, n.occasions = ncol(marr), r = rowSums(marr))
+    constant.inits <- function(){list(mean.phi2 = runif(1, 0, 1),
+                                      mean.p = runif(1, 0, 1))}
+    constant.parameters <- c("mean.p", "mean.phi2", "fit", "fit.new")
+    modelout[["null"]] <- JAGSParallel(nc, data=constant.data, inits=constant.inits, params=constant.parameters,
+                                       model.file="cjs-mnl-fixed.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+
+    # TSM --------------------------------------------------------------------------------------------------
+    write(paste("Null TSM model for ", species, sep=" "), logfile.name, append = TRUE)
+    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    strt <- Sys.time()
+    tsm.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr.TSM1),
+                     r.TSM1 = rowSums(marr.TSM1), r.TSM2 = rowSums(marr.TSM2))
+    tsm.inits <- function(){list(mean.phi1 = runif(1, 0, 1),
+                                 mean.phi2 = runif(1, 0, 1),
+                                 mean.p = runif(1, 0, 1))}
+    tsm.parameters <- c("mean.p", "mean.phi1", "mean.phi2","fit", "fit.new")
+    modelout[["null.tsm"]] <- JAGSParallel(nc, data=tsm.data, inits=tsm.inits, params=tsm.parameters,
+                                      model.file="cjs-mnl-TSM.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+
     # #Habitat --------------------------------------------------------------------------------------------------
     # #Habitat is more complicated because some species are only in two habitats
     # 
@@ -146,12 +153,10 @@ for (species in species.list){
         habitat.inits <- function(){list(mean.phi2.intro = runif(1, 0, 1),
                                          mean.phi2.native = runif(1, 0, 1),
                                          mean.phi2.scrub = runif(1, 0, 1),
-                                         mean.p.intro = runif(1, 0, 1),
-                                         mean.p.native = runif(1, 0, 1),
-                                         mean.p.scrub = runif(1, 0, 1))}
-        habitat.parameters <- c("mean.p.intro", "mean.p.native", "mean.p.scrub", "mean.phi2.native", "mean.phi2.scrub", "mean.phi2.intro", "fit", "fit.new")
-        modelout[["habitatp"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
-                                              model.file="cjs-mnl-habitatp.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+                                         mean.p = runif(1, 0, 1))}
+        habitat.parameters <- c("mean.p", "mean.phi2.native", "mean.phi2.scrub", "mean.phi2.intro", "fit", "fit.new")
+        modelout[["habitat"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
+                                              model.file="cjs-mnl-habitat.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     }
     if(length(marr.gp)==2) {
         # these cases will need a little more manipulation at the analysis stage to label habitat type
@@ -160,11 +165,10 @@ for (species in species.list){
 
         habitat.inits <- function(){list(mean.phi2.hab1 = runif(1, 0, 1),
                                          mean.phi2.hab2 = runif(1, 0, 1),
-                                         mean.p.hab1 = runif(1, 0, 1),
-                                         mean.p.hab2 = runif(1, 0, 1))}
-        habitat.parameters <- c("mean.p.hab1", "mean.p.hab2", "mean.phi2.hab1", "mean.phi2.hab2", "fit", "fit.new")
-        modelout[["habitatp"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
-                                              model.file="cjs-mnl-habitat-2groupsp.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+                                         mean.p = runif(1, 0, 1))}
+        habitat.parameters <- c("mean.p", "mean.phi2.hab1", "mean.phi2.hab2", "fit", "fit.new")
+        modelout[["habitat"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
+                                              model.file="cjs-mnl-habitat-2groups.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
         }
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
 
@@ -193,12 +197,10 @@ for (species in species.list){
                                          mean.phi2.intro = runif(1, 0, 1),
                                          mean.phi2.native = runif(1, 0, 1),
                                          mean.phi2.scrub = runif(1, 0, 1),
-                                         mean.p.intro = runif(1, 0, 1),
-                                         mean.p.native = runif(1, 0, 1),
-                                         mean.p.scrub = runif(1, 0, 1))}
-        habitat.parameters <- c("mean.p.intro", "mean.p.native", "mean.p.scrub", "mean.phi1.native", "mean.phi1.scrub", "mean.phi1.intro", "mean.phi2.native", "mean.phi2.scrub", "mean.phi2.intro2", "fit", "fit.new")
-        modelout[["habitatp.tsm"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
-                                              model.file="cjs-mnl-TSM-habitatp.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+                                         mean.p = runif(1, 0, 1))}
+        habitat.parameters <- c("mean.p", "mean.phi1.native", "mean.phi1.scrub", "mean.phi1.intro", "mean.phi2.native", "mean.phi2.scrub", "mean.phi2.intro2", "fit", "fit.new")
+        modelout[["habitat.tsm"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
+                                              model.file="cjs-mnl-TSM-habitat.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     }
     if(length(marr.gp)==2) {
         # these cases will need a little more manipulation at the analysis stage to label habitat type
@@ -216,11 +218,10 @@ for (species in species.list){
                                          mean.phi1.hab2 = runif(1, 0, 1),
                                          mean.phi2.hab1 = runif(1, 0, 1),
                                          mean.phi2.hab2 = runif(1, 0, 1),
-                                         mean.p.hab1 = runif(1, 0, 1),
-                                         mean.p.hab2 = runif(1, 0, 1))}
-        habitat.parameters <- c("mean.p.hab1", "mean.p.hab2", "mean.phi1.hab1", "mean.phi1.hab2", "mean.phi2.hab1", "mean.phi2.hab2", "fit", "fit.new")
-        modelout[["habitatp.tsm"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
-                                              model.file="cjs-mnl-TSM-habitat-2groupsp.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+                                         mean.p = runif(1, 0, 1))}
+        habitat.parameters <- c("mean.p", "mean.phi1.hab1", "mean.phi1.hab2", "mean.phi2.hab1", "mean.phi2.hab2", "fit", "fit.new")
+        modelout[["habitat.tsm"]] <- JAGSParallel(nc, data=habitat.data, inits=habitat.inits, params=habitat.parameters,
+                                              model.file="cjs-mnl-TSM-habitat-2groups.bug", n.chains=nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     }
     write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
 
@@ -231,32 +232,32 @@ for (species in species.list){
     nc <- 3
     # 
     # # Time -----------------------------------------------------------------------------------------------------
-    write(paste("Time model for ", species, sep=" "), logfile.name, append = TRUE)
-    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    strt <- Sys.time()       
-    time.data <- list(marr = marr, n.occasions = ncol(marr), r=rowSums(marr))
-    time.inits <- function(){list(mean.phi2 = runif(1, 0, 1),
-                                  sigma = runif(1, 0, 5),
-                                  mean.p = runif(1, 0, 1))}
-    time.parameters <- c("mean.p", "mean.phi2", "phi", "sigma2", "sigma2.real", "fit", "fit.new")
-    modelout[["time"]] <- JAGSParallel(nc, data=time.data, inits=time.inits, params=time.parameters, 
-                                        model.file="cjs-mnl-ran-time.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
-    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-     
-    # Time TSM ----------------------------------------------------------------------------------------------
-    write(paste("Time TSM model for ", species, sep=" "), logfile.name, append = TRUE)
-    write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
-    strt <- Sys.time()       
-    time.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr), r.TSM1=rowSums(marr.TSM1), r.TSM2=rowSums(marr.TSM2))
-    time.tsm.inits <- function(){list(mean.phi1 = runif(1, 0, 1), 
-                                   mean.phi2 = runif(1, 0, 1), 
-                                   sigma = runif(1, 0, 5),
-                                   mean.p = runif(1, 0, 1))}  
-    time.tsm.parameters <- c("mean.p", "mean.phi1", "mean.phi2", "phi.TSM1", "phi.TSM2", "sigma2", "sigma2.real", "fit", "fit.new")
-    modelout[["time.tsm"]] <- JAGSParallel(nc, data=time.data, inits=time.tsm.inits, params=time.tsm.parameters, 
-                                       model.file="cjs-mnl-TSM-ran-time.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
-    write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
-    
+    # write(paste("Time model for ", species, sep=" "), logfile.name, append = TRUE)
+    # write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    # strt <- Sys.time()       
+    # time.data <- list(marr = marr, n.occasions = ncol(marr), r=rowSums(marr))
+    # time.inits <- function(){list(mean.phi2 = runif(1, 0, 1),
+    #                               sigma = runif(1, 0, 5),
+    #                               mean.p = runif(1, 0, 1))}
+    # time.parameters <- c("mean.p", "mean.phi2", "phi", "sigma2", "sigma2.real", "fit", "fit.new")
+    # modelout[["time"]] <- JAGSParallel(nc, data=time.data, inits=time.inits, params=time.parameters, 
+    #                                     model.file="cjs-mnl-ran-time.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    # write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+    #  
+    # # Time TSM ----------------------------------------------------------------------------------------------
+    # write(paste("Time TSM model for ", species, sep=" "), logfile.name, append = TRUE)
+    # write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
+    # strt <- Sys.time()       
+    # time.data <- list(marr.TSM1 = marr.TSM1, marr.TSM2 = marr.TSM2, n.occasions = ncol(marr), r.TSM1=rowSums(marr.TSM1), r.TSM2=rowSums(marr.TSM2))
+    # time.tsm.inits <- function(){list(mean.phi1 = runif(1, 0, 1), 
+    #                                mean.phi2 = runif(1, 0, 1), 
+    #                                sigma = runif(1, 0, 5),
+    #                                mean.p = runif(1, 0, 1))}  
+    # time.tsm.parameters <- c("mean.p", "mean.phi1", "mean.phi2", "phi.TSM1", "phi.TSM2", "sigma2", "sigma2.real", "fit", "fit.new")
+    # modelout[["time.tsm"]] <- JAGSParallel(nc, data=time.data, inits=time.tsm.inits, params=time.tsm.parameters, 
+    #                                    model.file="cjs-mnl-TSM-ran-time.bug", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
+    # write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
+    # 
     # EVI ---------------------------------------------------------------------------------------------------
     # write(paste("EVI model for ", species, sep=" "), logfile.name, append = TRUE)
     # write(paste0("ni = ", ni, ", nt = ", nt, " , nb = ", nb, ", nc = ", nc), logfile.name, append = TRUE)
@@ -337,7 +338,12 @@ for (species in species.list){
     #                                                model.file="cjs-mnl-TSM-ran-time-2covint.txt", n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb)
     # write(paste("Model run took", round(Sys.time()-strt, 2),  units(Sys.time()-strt), sep = " "), logfile.name, append = TRUE)
     # 
-    save(modelout, file=paste0("results/", species, "_CJS_nojuv_model_output.rda"))
+    if(grouped) {
+      save(modelout, file=paste0("results/specialisms/", species, "_CJS_nojuv_model_output.rda"))  
+    } else {
+      save(modelout, file=paste0("results/species", species, "_CJS_nojuv_model_output.rda"))
+    }
+    
     
 }
 
