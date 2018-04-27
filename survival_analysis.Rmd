@@ -1,0 +1,381 @@
+---
+title: "Survival Analysis - multi-species random effects"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This analysis is following the methods from [Muñoz et al. 2018](http://www.bioone.org/doi/full/10.1642/AUK-17-91.1). In each model, species is included as a random effect and we can therefore extract mean information about the community. Due to the way the estimation works, we can also extract the survival estimates for individual species.
+
+## Data
+
+We are estimating apparent survival for 28 species. The recaptures have been grouped by year, so we have 11 recapture periods (from 33, 3 per year) in order to get annual survival estimates. 
+
+```{r importformat, include = FALSE}
+#load packages
+library(plyr)
+library(tidyverse)
+library(data.table)
+library(R2jags)
+library(cowplot)
+library(taxize)
+
+theme_set(theme_classic() + theme(strip.background = element_blank()))
+
+# Load and format banding data ----
+data_input <- c("data/banding_sheet.csv", "data/2016_data.csv")
+
+species_info <- read_csv("data/evaluated_species.csv")
+
+dat <- ldply(data_input, fread) %>% 
+    # remove juveniles and records with no species or band number
+    filter(Age != "Y", 
+         !(`Band Number` %in% c("99999", "9999", "", "SIN ANILLO")), 
+         !(`Specie Name` %in% c("", "U", "99999", "9"))) %>% 
+  # add a habitat and year column
+  mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub", ifelse(Location == "MASE", "Native", "Introduced")),
+         year = str_sub(Session, start = -2) %>% as.factor %>% as.numeric) %>% 
+  # select required columns
+  select(id = "Band Number", species = "Specie Name", habitat, year) %>% 
+  # join to species info to get the specialisms and remove species we are not analysing
+  inner_join(species_info) %>% 
+  # get unique yearly records (combining across the three sampling sessions)
+  group_by(year, id, species, specialization) %>% 
+  summarise(habitat = names(which.max(table(habitat)))) %>% 
+  mutate(recap = 1) %>% ungroup()
+
+# create sampsize vector (list of nind for each species) ----
+sampsize <- select(dat, species, id) %>% unique %>% group_by(species) %>% summarise(count = n()) %>% pull(count)
+
+# create the y matrix (nind * nocc * nspecies recapture history) ----
+y_2d <- select(dat, species, id, year, recap) %>% 
+  spread(year, recap, fill = 0)
+
+y_list <- split(y_2d, f = y_2d$species) %>% 
+  lapply(., function(x) {
+    df = as.matrix(select(x, -species, -id))
+    na_rows = matrix(NA, nrow = max(sampsize) - nrow(df), ncol = ncol(df))
+    out = rbind(df, na_rows)
+  }
+  )
+
+y <- simplify2array(y_list)
+
+# create the TSM matrix (nind * nocc * nspecies banding occasion (1 - first, 2 - all others)) ----
+tsm_2d <- select(dat, species, id, year) %>% 
+  mutate(year = str_pad(year, 2, pad = "0")) %>% 
+  # first group-arrange-mutate gets labels the first (1) and all following (2) banding occasions
+  group_by(species, id) %>% 
+  arrange(species, id, year) %>% 
+  mutate(recap = row_number()) %>% 
+  mutate(recap = ifelse(recap == 1, 1, 2)) %>% 
+  # spread and gather gets the years with no recaps included as 0
+  spread(year, recap, fill = 0) %>% 
+  gather(key = year, value = recap, -species, -id) %>% 
+  # second group-arrange-mutate fills in the blanks
+  group_by(species, id) %>% 
+  arrange(species, id, year) %>% 
+  mutate(recap = ifelse(recap == 0, NA, recap)) %>% 
+  fill(recap) %>% 
+  spread(year, recap) %>% ungroup
+
+tsm_list <- split(tsm_2d, f = tsm_2d$species) %>% 
+  lapply(., function(x) {
+    df = as.matrix(select(x, -species, -id))
+    na_rows = matrix(NA, nrow = max(sampsize) - nrow(df), ncol = ncol(df))
+    out = rbind(df, na_rows)
+  }
+  )
+
+tsm <- simplify2array(tsm_list)
+
+# create the habitat matrix (nind * nocc * nspecies habitat where recaptured) ----
+hab_2d <- mutate(dat, fhabitat = habitat %>% as.factor %>% as.numeric) %>% 
+  select(species, id, year, fhabitat) %>% 
+  mutate(year = str_pad(year, 2, pad = "0")) %>% 
+  # spread and gather gets the years with no recaps included as 0
+  spread(year, fhabitat, fill = 0) %>% 
+  gather(key = year, value = fhabitat, -species, -id) %>% 
+  # second group-arrange-mutate fills in the blanks
+  group_by(species, id) %>% 
+  arrange(species, id, year) %>% 
+  mutate(fhabitat = ifelse(fhabitat == 0, NA, fhabitat)) %>% 
+  fill(fhabitat) %>% 
+  spread(year, fhabitat) %>% ungroup
+
+hab_list <- split(hab_2d, f = hab_2d$species) %>% 
+  lapply(., function(x) {
+    df = as.matrix(select(x, -species, -id))
+    na_rows = matrix(NA, nrow = max(sampsize) - nrow(df), ncol = ncol(df))
+    out = rbind(df, na_rows)
+  }
+  )
+
+hab <- simplify2array(hab_list)
+
+# create f matrix (nind * nspecies occasion when banded) ----
+f <- group_by(dat, species, id) %>% summarise(year = min(year)) %>% 
+  group_by(species) %>% mutate(id = row_number()) %>% 
+  spread(species, year) %>% select(-id) %>% as.matrix()
+
+# create vector of specialism group (list of specialism for each species) ----
+group <- arrange(species_info, species) %>% pull(specialization)
+
+# create vector of family (list of family for each species) ----
+fam <- tax_name(query = species_info$species, get = "family", db = "ncbi") %>% 
+  arrange(query) %>% pull(family) %>% as.factor %>% as.integer
+
+nfam <- max(fam)
+
+# bundle data for jags ----
+mod_data <- list(y = y, f = f, tsm = tsm, hab = hab, fam = fam, group = group,
+                 nfam = nfam, nind = sampsize, n.occ = dim(y)[2], nspec = dim(y)[3])
+
+# set initial values ---- 
+# initial values for z will be set as 1 for each occasion following the occasion
+# on which an individual was first banded
+zinit <- array(dim = dim(y))
+for(s in 1:dim(y)[3]){
+  for (i in 1:sampsize[s]) {
+    for (t in (f[i,s] + 1):dim(y)[2]) {
+      if(f[i,s]+1 <= dim(y)[2]) zinit[i, t, s] <- 1
+    }
+  }
+}
+
+inits <- function(){list(z = zinit)}
+params <- c("phi", "p", "speciesphi1", "speciesphi2", "speciesphi1sd", "speciesphi2sd", 
+            "speciesp", "mean.phi", "mean.p", "sd.lphi", "sd.lp",
+            "indiff", "isdiff", "nsdiff", "beta.group")
+```
+
+## Full model analysis
+
+In the full model, we use a TSM approach (estimate survival between banding and first recapture separately from all other recaptures) to estimate mean apparent survival for each habitat type. We also extract the mean species level estimates, and the mean specialism group level estimates. We estimate p separately for each habitat to control for dectability differences in the three habitats. 
+```{r habp_model, eval = FALSE}
+mod_out <- jags(data = mod_data, model.file = "multi_sp_survival.bug.R", inits = inits, 
+                n.iter = 20000, n.chains = 3, parameters.to.save = params)
+save(mod_out, file="results/multi_sp_model.rda")
+```
+
+
+```{r analysis}
+load("results/multi_sp_model.rda")
+sims <- mod_out$BUGSoutput$sims.array
+# keep param names to reattach
+params <- names(sims[1,1,])
+# convert to 2d array
+dim(sims) <- c(prod(dim(sims)[1:2]), dim(sims)[3])
+colnames(sims) <- params
+
+sims_narrow <- as.tibble(sims) %>% 
+  gather(key = param, value = value) %>% 
+  mutate(param = str_replace(param, "\\[", "_"),
+         param = str_replace(param, "\\]", "")) %>% 
+  separate(param, into = c("param_name", "param_index"), sep = "_") 
+
+summ <- as_tibble(mod_out$BUGSoutput$summary, rownames = "param") %>% 
+  mutate(param = str_replace(param, "\\[", "_"),
+         param = str_replace(param, "\\]", "")) %>% 
+  separate(param, into = c("param_name", "param_index"), sep = "_")
+```
+
+### Posterior distributions of survival estimates in each habitat type
+```{r}
+hab_comp <- filter(sims_narrow, param_name == "mean.phi") %>% 
+  separate(param_index, into = c("a", "h")) %>% 
+  filter(a == 2) %>% 
+  mutate(Habitat = factor(h, levels=c(2, 1, 3), 
+                          labels=c("Native", "Introduced", "Scrub"))) %>% 
+  select(Habitat, value)
+
+ggplot(hab_comp, aes(x=value, fill=Habitat)) + 
+  geom_density(alpha=0.5, position="identity") + 
+  scale_fill_viridis_d() + 
+  xlab(expression("Mean "*phi))
+```
+
+### Posterior distributions of detection probability in each habitat type
+```{r}
+hab_comp <- filter(sims_narrow, param_name == "mean.p") %>% 
+  mutate(Habitat = factor(param_index, levels=c(2, 1, 3), 
+                          labels=c("Native", "Introduced", "Scrub"))) %>% 
+  select(Habitat, value)
+
+ggplot(hab_comp, aes(x=value, fill=Habitat)) + 
+  geom_density(alpha=0.5, position="identity") + 
+  scale_fill_viridis_d() + 
+  xlab("Mean p")
+```
+
+Any difference there is between habitats is likely down to the lower detection probability. 
+
+### Posterior distributions of the difference between survival estimates in each habitat type
+```{r}
+hab_comp <- filter(sims_narrow, param_name %in% c("indiff", "isdiff", "nsdiff")) %>% 
+  select(param_name, value)
+
+hab_summary <- filter(summ, param_name %in% c("indiff", "isdiff", "nsdiff")) %>% 
+  select(param_name, LCI = `2.5%`, UCI = `97.5%`) %>% gather(CI, value, -param_name)
+
+ggplot(hab_comp, aes(x=value, fill=param_name)) + 
+  geom_density(alpha=0.5, position="identity") + 
+  scale_fill_viridis_d(name = "", labels = c(expression(phi[Introduced] - phi[Native]), 
+                                  expression(phi[Introduced] - phi[Scrub]), 
+                                  expression(phi[Native] - phi[Scrub]))) + 
+  geom_vline(data = hab_summary, aes(xintercept = value, linetype = param_name)) + 
+  scale_linetype_discrete(name = "", labels = c(expression(phi[Introduced] - phi[Native]), 
+                                  expression(phi[Introduced] - phi[Scrub]), 
+                                  expression(phi[Native] - phi[Scrub]))) + 
+  xlab(expression("Mean "*phi))
+```
+
+Note that all 95% CIs of the differences between habitats include zero, so we cannot draw any conclusions about the difference in survival estimate between habitat types. 
+
+### Posterior summaries of group differences in apparent survival
+```{r}
+group_comp <- filter(sims_narrow, param_name == "speciesphi2") %>% 
+  mutate(species_no = param_index %>% as.numeric) %>% 
+    inner_join(arrange(species_info, species) %>% 
+               mutate(species_no = species %>% as.factor %>% as.numeric)) %>% 
+   mutate(specialization = factor(specialization, 
+                                  labels=c("Open habitat generalists", 
+                                           "Shrubby generalists", 
+                                           "Forest specialists")))
+  
+
+ggplot(group_comp, aes(x=value, fill=specialization)) + 
+  geom_density(alpha=0.5, position="identity") + 
+  scale_fill_viridis_d() + 
+  xlab(expression("Mean "*phi))
+
+beta_group <- filter(summ, param_name == "beta.group") %>% mutate(value = paste0(round(mean, 2), " (", round(`2.5%`, 2), ", ", round(`97.5%`, 2), ")")) %>% pull(value)
+```
+
+When we include the group identity as a covariate on phi, while also controlling for phylogenetic correlation by including family as a random factor (following the Muñoz paper), we get a non-important group effect of `r beta_group`. 
+
+### Apparent survival estimates for each species
+```{r, fig.height = 8}
+survival_comp <- filter(summ, param_name == "speciesphi2") %>% 
+  bind_cols(arrange(species_info, species)) %>% 
+  select(species, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`)
+
+pd <- position_dodge(1)
+
+ggplot(survival_comp, aes(x = species, y = mean_val)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = LCI, ymax = UCI)) + 
+  scale_y_continuous(limits = c(0, 1)) + 
+  labs(x = "", y = "Apparent survival") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+write_csv(survival_comp, "results/multi_sp_survival.csv")
+```
+
+### Detection probability estimates for each species
+```{r, fig.height = 8}
+detection_comp <- filter(summ, param_name == "speciesp") %>% 
+  bind_cols(arrange(species_info, species)) %>% 
+  select(species, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`)
+
+pd <- position_dodge(1)
+
+ggplot(detection_comp, aes(x = species, y = mean_val)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = LCI, ymax = UCI)) + 
+  scale_y_continuous(limits = c(0, 1)) + 
+  labs(x = "", y = "Detection probability") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+write_csv(detection_comp, "results/multi_sp_detection.csv")
+```
+### Variation in apparent survival between habitats for each species 
+```{r, fig.height = 8}
+habvar_comp <- filter(summ, param_name == "speciesphi2sd") %>% 
+  bind_cols(arrange(species_info, species)) %>% 
+  select(species, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  arrange(specialization, species)
+
+# get the species names in the right order
+sp_names <- distinct(habvar_comp, species, specialization) %>%
+  arrange(specialization, species)
+
+sp_names$specialization <- factor(sp_names$specialization, labels=c("Open habitat generalists", "Shrubby generalists", "Forest specialists"))
+
+
+# need to know where lines between specializations are
+sp_last <- group_by(sp_names, specialization) %>%
+  filter(row_number()==n())
+
+sp_last_position <- which(sp_names$species %in% sp_last$species)
+
+sp_first <- group_by(sp_names, specialization) %>%
+  filter(row_number()==1)
+
+sp_first_position <- which(sp_names$species %in% sp_first$species)
+
+sp_text_position <- (sp_last_position - sp_first_position)/2 + sp_first_position
+
+specializations <- levels(sp_names$specialization)
+
+pd <- position_dodge(1)
+
+ggplot(detection_comp, aes(x = species, y = mean_val)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = LCI, ymax = UCI)) + 
+  geom_vline(xintercept = sp_last_position[1:length(sp_last_position)-1] + 0.5, linetype = "F1") + 
+  annotate("text", x = sp_text_position, y = 1, label = specializations) + 
+  scale_y_continuous(limits = c(0, 1)) + 
+  labs(x = "", y = "Variation in apparent survival across habitats") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+write_csv(detection_comp, "results/multi_sp_detection.csv")
+```
+
+### Apparent survival estimates for each species by habitat
+```{r, fig.width = 20}
+survival_hab_comp <- filter(summ, param_name == "phi") %>% 
+  separate(param_index, into=c("species", "tsm", "habitat")) %>% 
+  filter(tsm == 2) %>% 
+  mutate(species_no = species %>% as.integer,
+         habitat = factor(habitat, levels=c(2,1,3), labels=c("Native", "Introduced", "Scrub"))) %>% 
+  select(-species) %>% 
+  inner_join(arrange(species_info, species) %>% 
+               mutate(species_no = species %>% as.factor %>% as.numeric)) %>% 
+  select(species, specialization, habitat, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  arrange(specialization, species)
+
+
+pd <- position_dodge(1)
+
+survival_hab_plot <- ggplot(survival_hab_comp, aes(x = species, y = mean_val, group=habitat)) + 
+  geom_errorbar(aes(ymin=LCI, ymax=UCI), colour="black", width=.1, position=pd) +
+  geom_point(position=pd, aes(shape=habitat), size=3) + 
+  geom_vline(xintercept = 1:nrow(sp_names) + 0.5, linetype = "dotted") +
+  geom_vline(xintercept = sp_last_position[1:length(sp_last_position)-1] + 0.5, linetype = "F1") + 
+  annotate("text", x = sp_text_position, y = 1, label = specializations) + 
+  labs(x = "", y = "Apparent Survival", shape = "Habitat") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+save_plot("results/survival_hab_plot.png", survival_hab_plot, base_width = 20, base_height = 10)
+
+write_csv(survival_hab_comp, "results/multi_sp_survival_hab.csv")
+
+survival_hab_plot
+```
+
+```{r}
+table1 <- filter(summ, param_name %in% c("speciesphi1", "speciesphi2", "speciesp")) %>% 
+  mutate(value = paste0(round(mean, 2), " (", round(`2.5%`, 2), ", ", round(`97.5%`, 2), ")")) %>% 
+  select(param_name, param_index, value) %>% 
+  mutate(param_index = param_index %>% as.integer) %>% 
+  spread(param_name, value) %>% 
+  bind_cols(arrange(species_info, species)) %>% 
+  arrange(specialization, species) %>% 
+  select(species, specialization, p = speciesp, phi1 = speciesphi1, phi2 = speciesphi2)
+
+write_csv(table1, "table1.csv")
+```
+

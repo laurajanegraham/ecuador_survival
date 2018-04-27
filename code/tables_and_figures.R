@@ -62,7 +62,7 @@ figure1_tab <- read_csv("results/species/nojuv_raw_results.csv") %>%
 sp_names <- distinct(figure1_tab, Species, specialization) %>%
   arrange(specialization, Species)
 
-sp_names$specialization <- factor(sp_names$specialization, labels=c("Forest specialists", "Shrubby generalists", "Open habitat generalists"))
+sp_names$specialization <- factor(sp_names$specialization, labels=c("Open habitat generalists", "Shrubby generalists", "Forest specialists"))
 figure1_tab$Species <- factor(figure1_tab$Species, levels=sp_names$Species)
 
 # need to know where lines between specializations are
