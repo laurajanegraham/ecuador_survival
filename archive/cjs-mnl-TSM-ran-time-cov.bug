@@ -1,0 +1,74 @@
+model {
+    # Priors and constraints
+    for (t in 1:(n.occasions-1)){
+        phi.TSM1[t] <- mean.phitsm1
+        logit(phi.TSM2[t]) <- mu + beta*x[t] + epsilon[t]
+        epsilon[t] ~ dnorm(0, tau)
+        p[t] <- mean.p
+    }
+    mean.phitsm1 ~ dunif(0, 1)          # Prior for mean juv. survival
+    mean.phitsm2 ~ dunif(0, 1)           # Prior for mean ad. survival
+    mu <- log(mean.phitsm2 / (1-mean.phitsm2))
+    sigma ~ dunif(0, 5)
+    tau <- pow(sigma, -2)
+    sigma2 <- pow(sigma, 2)
+    beta ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+    
+    # Temporal variance on real scale
+    sigma2.real <- sigma2 * pow(mean.phitsm2, 2) * pow((1-mean.phitsm2), 2)
+    mean.p ~ dunif(0, 1)               # Prior for mean recapture
+    
+    # Define the multinomial likelihood
+    for (t in 1:(n.occasions-1)){
+        marr.TSM1[t,1:n.occasions] ~ dmulti(pr.TSM1[t,], r.TSM1[t])
+        marr.TSM2[t,1:n.occasions] ~ dmulti(pr.TSM2[t,], r.TSM2[t])
+    }
+    
+    # Define the cell probabilities of the m-arrays
+    # Main diagonal
+    for (t in 1:(n.occasions-1)){
+        q[t] <- 1-p[t]            # Probability of non-recapture
+        pr.TSM1[t,t] <- phi.TSM1[t]*p[t]
+        pr.TSM2[t,t] <- phi.TSM2[t]*p[t]
+        # Above main diagonal
+        for (j in (t+1):(n.occasions-1)){
+            pr.TSM1[t,j] <- phi.TSM1[t]*prod(phi.TSM2[(t+1):j])*prod(q[t:(j-1)])*p[j]
+            pr.TSM2[t,j] <- prod(phi.TSM2[t:j])*prod(q[t:(j-1)])*p[j]
+        } #j
+        # Below main diagonal
+        for (j in 1:(t-1)){
+            pr.TSM1[t,j] <- 0
+            pr.TSM2[t,j] <- 0
+        } #j
+    } #t
+    
+    # Last column: probability of non-recapture
+    for (t in 1:(n.occasions-1)){
+        pr.TSM1[t,n.occasions] <- 1-sum(pr.TSM1[t,1:(n.occasions-1)])
+        pr.TSM2[t,n.occasions] <- 1-sum(pr.TSM2[t,1:(n.occasions-1)])
+    } #t
+    
+    # Assess model fit using Freeman-Tukey statistic
+    # Compute fit statistics for observed data
+    for (t in 1:(n.occasions-1)){
+        for (j in 1:n.occasions){
+            expmarr.TSM1[t,j] <- r.TSM1[t]*pr.TSM1[t,j]
+            expmarr.TSM2[t,j] <- r.TSM2[t]*pr.TSM2[t,j]
+            E.org.TSM1[t,j] <- pow((pow(marr.TSM1[t,j], 0.5)-pow(expmarr.TSM1[t,j], 0.5)), 2)
+            E.org.TSM2[t,j] <- pow((pow(marr.TSM2[t,j], 0.5)-pow(expmarr.TSM2[t,j], 0.5)), 2)
+        }
+    }
+    
+    # Generate replicate data and compute fit stats from them
+    for (t in 1:(n.occasions-1)){
+        marr.new.TSM1[t,1:n.occasions] ~ dmulti(pr.TSM1[t,], r.TSM1[t])
+        marr.new.TSM2[t,1:n.occasions] ~ dmulti(pr.TSM2[t,], r.TSM2[t])
+        for (j in 1:n.occasions){
+            E.new.TSM1[t,j] <- pow((pow(marr.new.TSM1[t,j], 0.5)-pow(expmarr.TSM1[t,j], 0.5)), 2)
+            E.new.TSM2[t,j] <- pow((pow(marr.new.TSM2[t,j], 0.5)-pow(expmarr.TSM2[t,j], 0.5)), 2)
+        }
+    }
+    fit <- sum(E.org.TSM1[,]) + sum(E.org.TSM2[,])
+    fit.new <- sum(E.new.TSM1[,]) + sum(E.new.TSM2[,])
+}
+

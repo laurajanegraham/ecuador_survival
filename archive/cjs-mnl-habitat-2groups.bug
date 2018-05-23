@@ -1,0 +1,63 @@
+
+    model {
+    # Priors and constraints
+    for (t in 1:(n.occasions-1)){
+    phi.1[t] <- mean.phi2.hab1
+    phi.2[t] <- mean.phi2.hab2
+    p[t] <- mean.p
+    }
+    mean.phi2.hab1 ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phi2.hab2 ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.p ~ dunif(0, 1)               # Prior for mean recapture
+    # Define the multinomial likelihood
+    for (t in 1:(n.occasions-1)){
+    marr.1[t,1:n.occasions] ~ dmulti(pr.1[t,], r.1[t])
+    marr.2[t,1:n.occasions] ~ dmulti(pr.2[t,], r.2[t])
+    }
+
+    # Define the cell probabilities of the m-arrays
+    # Main diagonal
+    for (t in 1:(n.occasions-1)){
+    q[t] <- 1-p[t]            # Probability of non-recapture
+    pr.1[t,t] <- phi.1[t]*p[t]
+    pr.2[t,t] <- phi.2[t]*p[t]
+    # Above main diagonal
+    for (j in (t+1):(n.occasions-1)){
+    pr.1[t,j] <- prod(phi.1[t:j])*prod(q[t:(j-1)])*p[j]
+    pr.2[t,j] <- prod(phi.2[t:j])*prod(q[t:(j-1)])*p[j]
+    } #j
+    # Below main diagonal
+    for (j in 1:(t-1)){
+    pr.1[t,j] <- 0
+    pr.2[t,j] <- 0
+    } #j
+    } #t
+    # Last column: probability of non-recapture
+    for (t in 1:(n.occasions-1)){
+    pr.1[t,n.occasions] <- 1-sum(pr.1[t,1:(n.occasions-1)])
+    pr.2[t,n.occasions] <- 1-sum(pr.2[t,1:(n.occasions-1)])
+    } #t
+    
+    # Assess model fit using Freeman-Tukey statistic
+    # Compute fit statistics for observed data
+    for (t in 1:(n.occasions-1)){
+    for (j in 1:n.occasions){
+    expmarr.1[t,j] <- r.1[t]*pr.1[t,j]
+    expmarr.2[t,j] <- r.2[t]*pr.2[t,j]
+    E.org.1[t,j] <- pow((pow(marr.1[t,j], 0.5)-pow(expmarr.1[t,j], 0.5)), 2)
+    E.org.2[t,j] <- pow((pow(marr.2[t,j], 0.5)-pow(expmarr.2[t,j], 0.5)), 2)
+    }
+    }
+    # Generate replicate data and compute fit stats from them
+    for (t in 1:(n.occasions-1)){
+    marr.new.1[t,1:n.occasions] ~ dmulti(pr.1[t,], r.1[t])
+    marr.new.2[t,1:n.occasions] ~ dmulti(pr.2[t,], r.2[t])
+    for (j in 1:n.occasions){
+    E.new.1[t,j] <- pow((pow(marr.new.1[t,j], 0.5)-pow(expmarr.1[t,j], 0.5)), 2)
+    E.new.2[t,j] <- pow((pow(marr.new.2[t,j], 0.5)-pow(expmarr.2[t,j], 0.5)), 2)
+    }
+    }
+    fit <- sum(E.org.1[,]) + sum(E.org.2[,])
+    fit.new <- sum(E.new.1[,]) + sum(E.new.2[,])
+    }
+    

@@ -1,0 +1,115 @@
+model {
+    # Priors and constraints
+    for (t in 1:(n.occasions-1)){
+        phi.intro1[t] <- mean.phi1.intro
+        phi.native1[t] <- mean.phi1.native
+        phi.scrub1[t] <- mean.phi1.scrub
+        phi.intro2[t] <- mean.phi2.intro
+        phi.native2[t] <- mean.phi2.native
+        phi.scrub2[t] <- mean.phi2.scrub
+        p.intro[t] <- mean.p.intro
+        p.native[t] <- mean.p.native
+        p.scrub[t] <- mean.p.scrub
+    }
+
+    mean.phi1.intro ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phi1.native ~ dunif(0, 1)           # Prior for mean survival in native habitat
+    mean.phi1.scrub ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.phi2.intro ~ dunif(0, 1)          # Prior for mean survival in introduced habitat
+    mean.phi2.native ~ dunif(0, 1)           # Prior for mean survival in native habitat
+    mean.phi2.scrub ~ dunif(0, 1)           # Prior for mean survival in scrub
+    mean.p.intro ~ dunif(0, 1)               # Prior for mean recapture
+    mean.p.native ~ dunif(0, 1)
+    mean.p.scrub ~ dunif(0, 1)
+    # Define the multinomial likelihood
+    for (t in 1:(n.occasions-1)){
+        marr.i1[t,1:n.occasions] ~ dmulti(pr.i1[t,], r.i1[t])
+        marr.n1[t,1:n.occasions] ~ dmulti(pr.n1[t,], r.n1[t])
+        marr.s1[t,1:n.occasions] ~ dmulti(pr.s1[t,], r.s1[t])
+        marr.i2[t,1:n.occasions] ~ dmulti(pr.i2[t,], r.i2[t])
+        marr.n2[t,1:n.occasions] ~ dmulti(pr.n2[t,], r.n2[t])
+        marr.s2[t,1:n.occasions] ~ dmulti(pr.s2[t,], r.s2[t])
+    }
+    
+    # Define the cell probabilities of the m-arrays
+    # Main diagonal
+    for (t in 1:(n.occasions-1)){
+        q.intro[t] <- 1-p.intro[t]            # Probability of non-recapture
+        q.native[t] <- 1-p.native[t]
+        q.scrub[t] <- 1-p.scrub[t]
+        pr.i1[t,t] <- phi.intro1[t]*p.intro[t]
+        pr.n1[t,t] <- phi.native1[t]*p.native[t]
+        pr.s1[t,t] <- phi.scrub1[t]*p.scrub[t]
+        pr.i2[t,t] <- phi.intro2[t]*p.intro[t]
+        pr.n2[t,t] <- phi.native2[t]*p.native[t]
+        pr.s2[t,t] <- phi.scrub2[t]*p.scrub[t]
+        # Above main diagonal
+        for (j in (t+1):(n.occasions-1)){
+
+            pr.i1[t,j] <- prod(phi.intro1[t:j])*prod(phi.intro2[(t+1):j])*prod(q.intro[t:(j-1)])*p.intro[j]
+            pr.n1[t,j] <- prod(phi.native1[t:j])*prod(phi.native2[(t+1):j])*prod(q.native[t:(j-1)])*p.native[j]
+            pr.s1[t,j] <- prod(phi.scrub1[t:j])*prod(phi.scrub2[(t+1):j])*prod(q.scrub[t:(j-1)])*p.scrub[j]
+
+            pr.i2[t,j] <- prod(phi.intro2[t:j])*prod(q.intro[t:(j-1)])*p.intro[j]
+            pr.n2[t,j] <- prod(phi.native2[t:j])*prod(q.native[t:(j-1)])*p.native[j]
+            pr.s2[t,j] <- prod(phi.scrub2[t:j])*prod(q.scrub[t:(j-1)])*p.scrub[j]
+        } #j
+        # Below main diagonal
+        for (j in 1:(t-1)){
+            pr.i1[t,j] <- 0
+            pr.n1[t,j] <- 0
+            pr.s1[t,j] <- 0
+            pr.i2[t,j] <- 0
+            pr.n2[t,j] <- 0
+            pr.s2[t,j] <- 0
+        } #j
+    } #t
+    # Last column: probability of non-recapture
+    for (t in 1:(n.occasions-1)){
+        pr.i1[t,n.occasions] <- 1-sum(pr.i1[t,1:(n.occasions-1)])
+        pr.n1[t,n.occasions] <- 1-sum(pr.n1[t,1:(n.occasions-1)])
+        pr.s1[t,n.occasions] <- 1-sum(pr.s1[t,1:(n.occasions-1)])
+        pr.i2[t,n.occasions] <- 1-sum(pr.i2[t,1:(n.occasions-1)])
+        pr.n2[t,n.occasions] <- 1-sum(pr.n2[t,1:(n.occasions-1)])
+        pr.s2[t,n.occasions] <- 1-sum(pr.s2[t,1:(n.occasions-1)])
+    } #t
+    
+    # Assess model fit using Freeman-Tukey statistic
+    # Compute fit statistics for observed data
+    for (t in 1:(n.occasions-1)){
+        for (j in 1:n.occasions){
+            expmarr.i1[t,j] <- r.i1[t]*pr.i1[t,j]
+            expmarr.n1[t,j] <- r.n1[t]*pr.n1[t,j]
+            expmarr.s1[t,j] <- r.s1[t]*pr.s1[t,j]
+            expmarr.i2[t,j] <- r.i2[t]*pr.i2[t,j]
+            expmarr.n2[t,j] <- r.n2[t]*pr.n2[t,j]
+            expmarr.s2[t,j] <- r.s2[t]*pr.s2[t,j]
+            E.org.i1[t,j] <- pow((pow(marr.i1[t,j], 0.5)-pow(expmarr.i1[t,j], 0.5)), 2)
+            E.org.n1[t,j] <- pow((pow(marr.n1[t,j], 0.5)-pow(expmarr.n1[t,j], 0.5)), 2)
+            E.org.s1[t,j] <- pow((pow(marr.s1[t,j], 0.5)-pow(expmarr.s1[t,j], 0.5)), 2)
+            E.org.i2[t,j] <- pow((pow(marr.i2[t,j], 0.5)-pow(expmarr.i2[t,j], 0.5)), 2)
+            E.org.n2[t,j] <- pow((pow(marr.n2[t,j], 0.5)-pow(expmarr.n2[t,j], 0.5)), 2)
+            E.org.s2[t,j] <- pow((pow(marr.s2[t,j], 0.5)-pow(expmarr.s2[t,j], 0.5)), 2)
+        }
+    }
+    # Generate replicate data and compute fit stats from them
+    for (t in 1:(n.occasions-1)){
+        marr.new.i1[t,1:n.occasions] ~ dmulti(pr.i1[t,], r.i1[t])
+        marr.new.n1[t,1:n.occasions] ~ dmulti(pr.n1[t,], r.n1[t])
+        marr.new.s1[t,1:n.occasions] ~ dmulti(pr.s1[t,], r.s1[t])
+        marr.new.i2[t,1:n.occasions] ~ dmulti(pr.i2[t,], r.i2[t])
+        marr.new.n2[t,1:n.occasions] ~ dmulti(pr.n2[t,], r.n2[t])
+        marr.new.s2[t,1:n.occasions] ~ dmulti(pr.s2[t,], r.s2[t])
+        for (j in 1:n.occasions){
+            E.new.i1[t,j] <- pow((pow(marr.new.i1[t,j], 0.5)-pow(expmarr.i1[t,j], 0.5)), 2)
+            E.new.n1[t,j] <- pow((pow(marr.new.n1[t,j], 0.5)-pow(expmarr.n1[t,j], 0.5)), 2)
+            E.new.s1[t,j] <- pow((pow(marr.new.s1[t,j], 0.5)-pow(expmarr.s1[t,j], 0.5)), 2)
+            E.new.i2[t,j] <- pow((pow(marr.new.i2[t,j], 0.5)-pow(expmarr.i2[t,j], 0.5)), 2)
+            E.new.n2[t,j] <- pow((pow(marr.new.n2[t,j], 0.5)-pow(expmarr.n2[t,j], 0.5)), 2)
+            E.new.s2[t,j] <- pow((pow(marr.new.s2[t,j], 0.5)-pow(expmarr.s2[t,j], 0.5)), 2)
+        }
+    }
+    fit <- sum(E.org.i1[,]) + sum(E.org.n1[,]) + sum(E.org.s1[,]) + sum(E.org.i2[,]) + sum(E.org.n2[,]) + sum(E.org.s2[,])
+    fit.new <-sum(E.new.i1[,]) + sum(E.new.n1[,]) + sum(E.new.s1[,]) + sum(E.new.i2[,]) + sum(E.new.n2[,]) + sum(E.new.s2[,])
+}
+

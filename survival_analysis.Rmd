@@ -376,6 +376,6 @@ table1 <- filter(summ, param_name %in% c("speciesphi1", "speciesphi2", "speciesp
   arrange(specialization, species) %>% 
   select(species, specialization, p = speciesp, phi1 = speciesphi1, phi2 = speciesphi2)
 
-write_csv(table1, "table1.csv")
+write_csv(table1, "results/table1.csv")
 ```
 

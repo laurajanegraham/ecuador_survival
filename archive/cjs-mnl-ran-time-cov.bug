@@ -1,0 +1,60 @@
+
+model {
+    # Priors and constraints
+    for (t in 1:(n.occasions-1)){
+        logit(phi[t]) <- mu + beta_evi*x[t] + epsilon[t]
+        epsilon[t] ~ dnorm(0, tau)
+        p[t] <- mean.p
+    }
+    mean.phi2 ~ dunif(0, 1)             # Prior for mean survival
+    mu <- log(mean.phi2 / (1-mean.phi2)) # Logit transformation
+    sigma ~ dunif(0, 5)                # Prior for standard deviation
+    tau <- pow(sigma, -2)
+    sigma2 <- pow(sigma, 2)
+    beta_evi ~ dnorm(0, 0.001)I(-10, 10) # Prior for slope parameter
+    # Temporal variance on real scale
+    sigma2.real <- sigma2 * pow(mean.phi2, 2) * pow((1-mean.phi2), 2) 
+    mean.p ~ dunif(0, 1)                   # Prior for mean recapture
+    # Define the multinomial likelihood
+    for (t in 1:(n.occasions-1)){
+        marr[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+    }
+
+    # Define the cell probabilities of the m-array:
+    # Main diagonal
+    for (t in 1:(n.occasions-1)){
+        q[t] <- 1-p[t]
+        pr[t,t] <- phi[t]*p[t]	
+        # Above main diagonal
+        for (j in (t+1):(n.occasions-1)){
+            pr[t,j] <- prod(phi[t:j])*prod(q[t:(j-1)])*p[j]
+        } #j	
+    # Below main diagonal
+        for (j in 1:(t-1)){
+            pr[t,j]<-0
+        } #j
+    } #t
+    # Last column: probability of non-recapture
+    for (t in 1:(n.occasions-1)){
+        pr[t,n.occasions] <- 1-sum(pr[t,1:(n.occasions-1)])
+    } # t
+
+    # Assess model fit using Freeman-Tukey statistic
+    # Compute fit statistics for observed data
+    for (t in 1:(n.occasions-1)){
+        for (j in 1:n.occasions){
+            expmarr[t,j] <- r[t]*pr[t,j]
+            E.org[t,j] <- pow((pow(marr[t,j], 0.5)-pow(expmarr[t,j], 0.5)), 2)
+        }
+    }
+    # Generate replicate data and compute fit stats from them
+    for (t in 1:(n.occasions-1)){
+        marr.new[t,1:n.occasions] ~ dmulti(pr[t,], r[t])
+        for (j in 1:n.occasions){
+            E.new[t,j] <- pow((pow(marr.new[t,j], 0.5)-pow(expmarr[t,j], 0.5)), 2)
+        }
+    }
+    fit <- sum(E.org[,])
+    fit.new <- sum(E.new[,])
+}
+    
