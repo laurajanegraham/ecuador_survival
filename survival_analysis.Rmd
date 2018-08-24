@@ -28,24 +28,32 @@ theme_set(theme_classic() + theme(strip.background = element_blank()))
 # Load and format banding data ----
 data_input <- c("data/banding_sheet.csv", "data/2016_data.csv")
 
-species_info <- read_csv("data/evaluated_species.csv")
+species_names <- read_csv("data/species_names.csv") %>% 
+  rename(sci_name1 = `New name`, sci_name2 = `Old name`, common = `English name`) %>% 
+  mutate(sci_name2 = toupper(sci_name2))
 
+species_info <- read_csv("data/evaluated_species.csv") %>% 
+  inner_join(species_names, by = c("species" = "sci_name2")) %>% 
+  #mutate(species = common) %>% 
+  select(-sci_name1)
+  
 dat <- ldply(data_input, fread) %>% 
     # remove juveniles and records with no species or band number
     filter(Age != "Y", 
          !(`Band Number` %in% c("99999", "9999", "", "SIN ANILLO")), 
          !(`Specie Name` %in% c("", "U", "99999", "9"))) %>% 
   # add a habitat and year column
-  mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Scrub", ifelse(Location == "MASE", "Native", "Introduced")),
+  mutate(habitat = ifelse(Location %in% c("LLAV", "SANA"), "Shrubs", ifelse(Location == "MASE", "Forest", "Grasslands")),
          year = str_sub(Session, start = -2) %>% as.factor %>% as.numeric) %>% 
   # select required columns
   select(id = "Band Number", species = "Specie Name", habitat, year) %>% 
   # join to species info to get the specialisms and remove species we are not analysing
   inner_join(species_info) %>% 
   # get unique yearly records (combining across the three sampling sessions)
-  group_by(year, id, species, specialization) %>% 
+  group_by(year, id, common, specialization) %>% 
   summarise(habitat = names(which.max(table(habitat)))) %>% 
-  mutate(recap = 1) %>% ungroup()
+  mutate(recap = 1) %>% ungroup() %>% 
+  rename(species = common)
 
 # create sampsize vector (list of nind for each species) ----
 sampsize <- select(dat, species, id) %>% unique %>% group_by(species) %>% summarise(count = n()) %>% pull(count)
@@ -149,7 +157,7 @@ for(s in 1:dim(y)[3]){
 inits <- function(){list(z = zinit)}
 params <- c("phi", "p", "speciesphi1", "speciesphi2", "speciesphi1sd", "speciesphi2sd", 
             "speciesp", "mean.phi", "mean.p", "sd.lphi", "sd.lp",
-            "indiff", "isdiff", "nsdiff", "beta.group")
+            "indiff", "isdiff", "nsdiff", "beta.group", "allmean.phi", "allsd.phi")
 ```
 
 ## Full model analysis
@@ -190,7 +198,7 @@ hab_comp <- filter(sims_narrow, param_name == "mean.phi") %>%
   separate(param_index, into = c("a", "h")) %>% 
   filter(a == 2) %>% 
   mutate(Habitat = factor(h, levels=c(2, 1, 3), 
-                          labels=c("Native", "Introduced", "Scrub"))) %>% 
+                          labels=c("Forest", "Grasslands", "Shrubs"))) %>% 
   select(Habitat, value)
 
 ggplot(hab_comp, aes(x=value, fill=Habitat)) + 
@@ -203,13 +211,13 @@ ggplot(hab_comp, aes(x=value, fill=Habitat)) +
 ```{r}
 hab_p <- filter(sims_narrow, param_name == "mean.p") %>% 
   mutate(Habitat = factor(param_index, levels=c(2, 1, 3), 
-                          labels=c("Native", "Introduced", "Scrub"))) %>% 
+                          labels=c("Forest", "Grasslands", "Shrubs"))) %>% 
   select(Habitat, value)
 
 hab_p_plot <- ggplot(hab_p, aes(x=value, fill=Habitat)) + 
   geom_density(alpha=0.5, position="identity") + 
   scale_fill_viridis_d() + 
-  xlab(expression("Mean "*italic("p")))
+  xlab(expression("Mean "*italic("p"))) + ylab("Density")
 
 hab_p_plot
 save_plot("doc/figureS1_habitat_detection_comparison.png", plot = hab_p_plot)
@@ -227,14 +235,14 @@ hab_summary <- filter(summ, param_name %in% c("indiff", "isdiff", "nsdiff")) %>%
 
 hab_comp_plot <- ggplot(hab_comp, aes(x=value, fill=param_name)) + 
   geom_density(alpha=0.5, position="identity") + 
-  scale_fill_viridis_d(name = "", labels = c(expression(phi[Introduced] - phi[Native]), 
-                                  expression(phi[Introduced] - phi[Scrub]), 
-                                  expression(phi[Native] - phi[Scrub]))) + 
+  scale_fill_viridis_d(name = "", labels = c(expression(phi[Grasslands] - phi[Forest]), 
+                                  expression(phi[Grasslands] - phi[Shrubs]), 
+                                  expression(phi[Forest] - phi[Shrubs]))) + 
   geom_vline(data = hab_summary, aes(xintercept = value, linetype = param_name)) + 
-  scale_linetype_discrete(name = "", labels = c(expression(phi[Introduced] - phi[Native]), 
-                                  expression(phi[Introduced] - phi[Scrub]), 
-                                  expression(phi[Native] - phi[Scrub]))) + 
-  xlab(expression("Mean "*phi))
+  scale_linetype_discrete(name = "", labels = c(expression(phi[Grasslands] - phi[Forest]), 
+                                  expression(phi[Grasslands] - phi[Shrubs]), 
+                                  expression(phi[Forest] - phi[Shrubs]))) + 
+  xlab(expression("Mean "*phi)) + ylab("Density")
 
 hab_comp_plot
 save_plot("doc/figure1_habitat_comparison.png", plot = hab_comp_plot)
@@ -257,7 +265,7 @@ group_comp <- filter(sims_narrow, param_name == "speciesphi2") %>%
 sp_comp_plot <- ggplot(group_comp, aes(x=value, fill=specialization)) + 
   geom_density(alpha=0.5, position="identity") + 
   scale_fill_viridis_d() + 
-  xlab(expression("Mean "*phi))
+  xlab(expression("Mean "*phi)) + ylab("Density")
 
 sp_comp_plot
 
@@ -272,7 +280,7 @@ When we include the group identity as a covariate on phi, while also controlling
 ```{r, fig.height = 8}
 survival_comp <- filter(summ, param_name == "speciesphi2") %>% 
   bind_cols(arrange(species_info, species)) %>% 
-  select(species, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  select(species = common, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
   arrange(specialization, species) %>% 
   mutate(species = factor(species, levels = species))
 
@@ -316,7 +324,7 @@ write_csv(survival_comp, "results/multi_sp_survival.csv")
 ```{r, fig.height = 8}
 detection_comp <- filter(summ, param_name == "speciesp") %>% 
   bind_cols(arrange(species_info, species)) %>% 
-  select(species, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  select(species = common, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
   arrange(specialization, species) %>% 
   mutate(species = factor(species, levels = species))
 
@@ -333,11 +341,12 @@ ggplot(detection_comp, aes(x = species, y = mean_val)) +
 
 write_csv(detection_comp, "results/multi_sp_detection.csv")
 ```
+
 ### Variation in apparent survival between habitats for each species 
 ```{r, fig.height = 8}
 habvar_comp <- filter(summ, param_name == "speciesphi2sd") %>% 
   bind_cols(arrange(species_info, species)) %>% 
-  select(species, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  select(species = common, specialization, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
   arrange(specialization, species) %>% 
   arrange(specialization, species) %>% 
   mutate(species = factor(species, levels = species))
@@ -366,7 +375,7 @@ specializations <- levels(sp_names$specialization)
 
 pd <- position_dodge(1)
 
-ggplot(detection_comp, aes(x = species, y = mean_val)) + 
+ggplot(habvar_comp, aes(x = species, y = mean_val)) + 
   geom_point() + 
   geom_errorbar(aes(ymin = LCI, ymax = UCI)) + 
   geom_vline(xintercept = sp_last_position[1:length(sp_last_position)-1] + 0.5, linetype = "F1") + 
@@ -375,7 +384,7 @@ ggplot(detection_comp, aes(x = species, y = mean_val)) +
   labs(x = "", y = "Variation in apparent survival across habitats") + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-write_csv(detection_comp, "results/multi_sp_detection.csv")
+write_csv(habvar_comp, "results/multi_sp_habvar.csv")
 ```
 
 ### Apparent survival estimates for each species by habitat
@@ -384,11 +393,11 @@ survival_hab_comp <- filter(summ, param_name == "phi") %>%
   separate(param_index, into=c("species", "tsm", "habitat")) %>% 
   filter(tsm == 2) %>% 
   mutate(species_no = species %>% as.integer,
-         habitat = factor(habitat, levels=c(2,1,3), labels=c("Native", "Introduced", "Scrub"))) %>% 
+         habitat = factor(habitat, levels=c(2,1,3), labels=c("Forest", "Grasslands", "Shrubs"))) %>% 
   select(-species) %>% 
   inner_join(arrange(species_info, species) %>% 
                mutate(species_no = species %>% as.factor %>% as.numeric)) %>% 
-  select(species, specialization, habitat, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  select(species = common, specialization, habitat, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
   arrange(specialization, species) %>%
   mutate(species = factor(species, levels = habvar_comp$species))
 
@@ -404,7 +413,7 @@ survival_hab_plot <- ggplot(survival_hab_comp, aes(x = species, y = mean_val, gr
   labs(x = "", y = "Apparent Survival", shape = "Habitat") + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-save_plot("results/survival_hab_plot.png", survival_hab_plot, base_width = 20, base_height = 10)
+save_plot("doc/figureS2_survival_hab_plot.png", survival_hab_plot, base_width = 20, base_height = 10)
 
 write_csv(survival_hab_comp, "results/multi_sp_survival_hab.csv")
 
@@ -422,8 +431,8 @@ table1 <- filter(summ, param_name %in% c("speciesphi1", "speciesphi2", "speciesp
                                  labels=c("Open habitat generalists", 
                                           "Shrubby generalists", 
                                           "Forest specialists"))) %>% 
-  arrange(specialization, species) %>% 
-  select(species, specialization, p = speciesp, phi1 = speciesphi1, phi2 = speciesphi2)
+  arrange(specialization, common) %>% 
+  select(species = common, specialization, p = speciesp, phi1 = speciesphi1, phi2 = speciesphi2)
 
 write_csv(table1, "doc/table1_survival_estimates.csv")
 
@@ -434,11 +443,11 @@ kable(table1)
 detect_hab_comp <- filter(summ, param_name == "p") %>% 
   separate(param_index, into=c("species", "habitat")) %>% 
   mutate(species_no = species %>% as.integer,
-         habitat = factor(habitat, levels=c(2,1,3), labels=c("Native", "Introduced", "Scrub"))) %>% 
+         habitat = factor(habitat, levels=c(2,1,3), labels=c("Forest", "Grasslands", "Shrubs"))) %>% 
   select(-species) %>% 
   inner_join(arrange(species_info, species) %>% 
                mutate(species_no = species %>% as.factor %>% as.numeric)) %>% 
-  select(species, specialization, habitat, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
+  select(species = common, specialization, habitat, mean_val = mean, LCI = `2.5%`, UCI = `97.5%`) %>% 
   arrange(specialization, species) %>%
   mutate(species = factor(species, levels = habvar_comp$species))
 
@@ -447,11 +456,11 @@ table_s2 <- filter(summ, param_name %in% c("phi", "p")) %>%
   separate(param_index, into=c("species", "tsm", "habitat")) %>% 
   filter(tsm == 2) %>% 
   mutate(species_no = species %>% as.integer,
-         habitat = factor(habitat, levels=c(2,1,3), labels=c("Native", "Introduced", "Scrub"))) %>% 
+         habitat = factor(habitat, levels=c(2,1,3), labels=c("Forest", "Grasslands", "Shrubs"))) %>% 
   select(-species) %>% 
   inner_join(arrange(species_info, species) %>% 
                mutate(species_no = species %>% as.factor %>% as.numeric)) %>% 
-  select(species, specialization, habitat, value, param_name) %>% 
+  select(species = common, specialization, habitat, value, param_name) %>% 
   spread(param_name, value) %>% mutate(specialization = factor(specialization, 
                                  labels=c("Open habitat generalists", 
                                           "Shrubby generalists", 
@@ -469,7 +478,7 @@ table_s2 <- bind_rows(survival_hab_comp %>% mutate(param = "phi"),
                                           "Forest specialists"))) %>% 
   arrange(specialization, species)
 
-write_csv(table1, "doc/tableS2_habitat_survival_estimates.csv")
+write_csv(table_s2, "doc/tableS2_habitat_survival_estimates.csv")
 
 kable(table_s2)
 ```

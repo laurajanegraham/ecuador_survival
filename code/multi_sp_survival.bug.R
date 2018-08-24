@@ -66,7 +66,7 @@ model {
     } #i
   } #s
   
-  # mean survival for species and for each species, a measure of variance between habitats?
+  # mean and sd survival for each species
   for(s in 1:nspec) {
     speciesp[s] <- mean(p[s,])
     speciesphi1[s] <- mean(phi[s,1,])  
@@ -79,6 +79,10 @@ model {
   indiff <- mean.phi[2,1] - mean.phi[2,2]
   isdiff <- mean.phi[2,1] - mean.phi[2,3]
   nsdiff <- mean.phi[2,2] - mean.phi[2,3]
+  
+  # community mean survival
+  allmean.phi <- mean(mean.phi[2,])
+  allsd.phi <- mean(sd.lphi[2,])
   
   # # mean survival for specialisms (could not work out how to do in a loop due to diff # species)
   # for(s in 1:gsampsize[1]){
